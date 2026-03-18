@@ -18,33 +18,12 @@ param fileShareName string
 param tags object = {}
 
 var environmentName = 'cae-${resourceToken}'
-var logAnalyticsName = 'law-${resourceToken}'
-
-resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
-  name: logAnalyticsName
-  location: location
-  tags: tags
-  properties: {
-    sku: {
-      name: 'PerGB2018'
-    }
-    retentionInDays: 30
-  }
-}
 
 resource environment 'Microsoft.App/managedEnvironments@2025-01-01' = {
   name: environmentName
   location: location
   tags: tags
-  properties: {
-    appLogsConfiguration: {
-      destination: 'log-analytics'
-      logAnalyticsConfiguration: {
-        customerId: logAnalytics.properties.customerId
-        sharedKey: logAnalytics.listKeys().primarySharedKey
-      }
-    }
-  }
+  properties: {}
 }
 
 resource envStorage 'Microsoft.App/managedEnvironments/storages@2025-01-01' = {
