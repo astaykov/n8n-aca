@@ -1,0 +1,30 @@
+# Azure
+.azure/
+
+# Environment files and secrets
+*.env
+*.env.local
+*.env.*.local
+.env*
+*.secret
+*.secrets
+
+# Dependencies
+node_modules/
+
+# IDE and OS files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+temp/

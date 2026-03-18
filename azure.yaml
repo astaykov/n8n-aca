@@ -1,0 +1,9 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Azure/azure-dev/main/schemas/v1.0/azure.yaml.json
+
+name: n8n-aca
+metadata:
+  template: n8n-aca
+infra:
+  provider: bicep
+  path: infra
+  module: main
