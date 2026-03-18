@@ -37,6 +37,11 @@ param tags object = {}
 
 var appName = 'ca-n8n-${resourceToken}'
 
+// Reference the existing Container Apps Environment to get its default domain
+resource environment 'Microsoft.App/managedEnvironments@2025-01-01' existing = {
+  name: last(split(environmentId, '/'))
+}
+
 resource n8nApp 'Microsoft.App/containerApps@2025-01-01' = {
   name: length(appName) > 32 ? substring(appName, 0, 32) : appName
   location: location
@@ -75,6 +80,15 @@ resource n8nApp 'Microsoft.App/containerApps@2025-01-01' = {
             {
               name: 'N8N_PROTOCOL'
               value: 'https'
+            }
+            // Tell n8n its public URL for webhooks and chat
+            {
+              name: 'WEBHOOK_URL'
+              value: 'https://${length(appName) > 32 ? substring(appName, 0, 32) : appName}.${environment.properties.defaultDomain}'
+            }
+            {
+              name: 'N8N_EDITOR_BASE_URL'
+              value: 'https://${length(appName) > 32 ? substring(appName, 0, 32) : appName}.${environment.properties.defaultDomain}'
             }
             {
               name: 'GENERIC_TIMEZONE'
