@@ -7,3 +7,22 @@ infra:
   provider: bicep
   path: infra
   module: main
+  target: subscription
+
+services:
+  # Test SPA: Dockerfile in test-spa/, deployed to the ca-spa-* Container App.
+  # Run `azd deploy spa` after `azd provision` to build and push the Docker image.
+  spa:
+    project: ./test-spa
+    language: docker
+    host: containerapp
+    docker:
+      remoteBuild: true
+
+hooks:
+  postprovision:
+    # Runs automatically after `azd provision`.
+    # Configures Entra Agent ID objects and deploys credentials + workflows to n8n.
+    # Reads N8N_URL and ENTRA_TENANT_ID from azd environment (set by Bicep outputs).
+    shell: pwsh
+    run: ./scripts/postprovision.ps1

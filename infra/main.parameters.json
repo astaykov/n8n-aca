@@ -2,8 +2,11 @@
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
   "contentVersion": "1.0.0.0",
   "parameters": {
+    "resourceGroupName": {
+      "value": "${AZURE_RESOURCE_GROUP}"
+    },
     "location": {
-      "value": "westus"
+      "value": "northeurope"
     },
     "n8nImage": {
       "value": "docker.n8n.io/n8nio/n8n:latest"
@@ -16,6 +19,27 @@
     },
     "fileShareName": {
       "value": "n8ndata"
+    },
+    "entraTenantId": {
+      "value": "06a05be1-33df-4feb-9009-95c7a27a7a49"
+    },
+    "openAiDeploymentName": {
+      "value": "gpt-5.4"
+    },
+    "openAiModelName": {
+      "value": "gpt-4o"
+    },
+    "openAiModelVersion": {
+      "value": "2024-11-20"
+    },
+    "openAiDeploymentSku": {
+      "value": "GlobalStandard"
+    },
+    "openAiResourceGroupName": {
+      "value": "rg-n8n-openai-8"
+    },
+    "openAiLocation": {
+      "value": "eastus2"
     }
   }
 }

@@ -1,0 +1,220 @@
+{
+  "name": "HTTP Request with autonomous agent token",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "@astaykov/n8n-nodes-entraagentid.entraAgentIdAuthManager",
+      "typeVersion": 1,
+      "position": [
+        112,
+        0
+      ],
+      "id": "980f1578-c1ae-4ae9-9e39-d603677fc434",
+      "name": "Entra Agent ID Authentication Manager",
+      "credentials": {
+        "entraAgentIDApi": {
+          "id": "REPLACE_WITH_AUTONOMOUS_CREDENTIAL_ID",
+          "name": "REPLACE_WITH_AUTONOMOUS_CREDENTIAL_NAME"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {
+          "systemMessage": "# System definition\nYou are fully autonomous AI Agent. You are equipped with tools to connect to external sources.\nYou are highly specialized in Microsoft Graph actions.\n\nIf you encounter authentication errors, like access denied, HTTP 401 or HTTP 403 errors, ask the user to navigate to `https://myaccess.microsoft.com/@ai.dayzure.com#/access-packages/157f7c80-7771-4aec-95e4-a111d0ba6a4a` and request this access package for you! Ask the user to confirm the access package is successfully delivered before you try again!\n\nYou have the following tools at your disposal:\n## MSLearn\nUse this tool to learn how to call MSGraph - what endpoints you need invoke, what query string parameters and what the payload must look like for PUT, POST and PATCH requests.\n## MSGraph\nThis is your main action tool. Use this tool to invoke Microsoft Graph requests!\nNEVER invoke DELETE operations.\nRequest explicit user confirmation for WRITE (PUT, POST, PATCH) requests!"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        320,
+        0
+      ],
+      "id": "83d1d3be-097b-4b14-8bc3-593c0b4e0d58",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": "gpt-5.4",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatAzureOpenAi",
+      "typeVersion": 1,
+      "position": [
+        224,
+        192
+      ],
+      "id": "887f3ca5-7bb0-4e81-96bb-b9b4e81fb293",
+      "name": "Azure OpenAI GPT-5.4",
+      "credentials": {
+        "azureOpenAiApi": {
+          "id": "REPLACE_WITH_AZURE_OPENAI_CREDENTIAL_ID",
+          "name": "REPLACE_WITH_AZURE_OPENAI_CREDENTIAL_NAME"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        352,
+        192
+      ],
+      "id": "95e1422b-da83-4a96-8cd6-c4cc141cad45",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        -144,
+        0
+      ],
+      "id": "6763bdfc-5bfe-4ceb-ac34-a77bae54f84b",
+      "name": "When chat message received",
+      "webhookId": "c48f1bf6-14d2-43ea-abe7-45753dc0d833"
+    },
+    {
+      "parameters": {
+        "endpointUrl": "https://learn.microsoft.com/api/mcp",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.mcpClientTool",
+      "typeVersion": 1.2,
+      "position": [
+        496,
+        192
+      ],
+      "id": "60fdf990-93bb-44ca-83e5-e93d59dc1067",
+      "name": "MSLearn"
+    },
+    {
+      "parameters": {
+        "toolDescription": "Microsoft Graph Tool. Use only when other tools are not available!\n* Path MUST start with /v1.0/ (or /beta/ if explicitly required).\n* Never call domains other than `https://graph.microsoft.com/`.\n* For write actions, summarize the intended change before executing.\nIf you encounter authentication errors, like FORBIDDEN, access denied, HTTP 401 or HTTP 403 errors, ask the user to navigate to `https://myaccess.microsoft.com/@ai.dayzure.com#/access-packages/157f7c80-7771-4aec-95e4-a111d0ba6a4a` and request this access package for you! Ask the user to confirm the access package is successfully delivered before you try again!",
+        "method": "={{ \n  (['GET','POST','PATCH'].includes(\n    (($fromAI('method','HTTP method: GET/POST/PATCH','string','GET') || 'GET').trim().toUpperCase())\n  ))\n  ? (($fromAI('method','HTTP method: GET/POST/PATCH','string','GET') || 'GET').trim().toUpperCase())\n  : 'GET'\n}}",
+        "url": "={{ 'https://graph.microsoft.com' + $fromAI('path', 'Graph path starting with /v1.0 or /beta. May include query string. Example: /v1.0/users or /v1.0/me/messages or /v1.0/users?$select=id,displayName', 'string') }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpBearerAuth",
+        "sendHeaders": true,
+        "specifyHeaders": "=keypair",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "ConsistencyLevel",
+              "value": "eventual"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $fromAI('body', 'JSON payload for POST/PATCH. For GET, return {}', 'json', {}) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.4,
+      "position": [
+        640,
+        192
+      ],
+      "id": "48489a84-5c5f-4c02-9b08-562e68c7afbf",
+      "name": "MSGraph",
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "REPLACE_WITH_BEARER_TOKEN_CREDENTIAL_ID",
+          "name": "REPLACE_WITH_BEARER_TOKEN_CREDENTIAL_NAME"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Entra Agent ID Authentication Manager": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        []
+      ]
+    },
+    "Azure OpenAI GPT-5.4": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "Entra Agent ID Authentication Manager",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MSLearn": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MSGraph": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "c6b5dc40-7a9d-4ec6-a967-0c984c3c29c8",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "c903f3ec4e7ffc2770c5de96c9ee3886d90ab36287cde9dfe3fd1b63574f9b25"
+  },
+  "id": "0nnyiDMcbNRGTp8V",
+  "tags": []
+}

@@ -1,0 +1,209 @@
+{
+  "name": "webhook - assistive agent (on-behalf-of)",
+  "nodes": [
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('Webhook').item.json.body.chatInput }}",
+        "options": {
+          "systemMessage": "=You are a helpful assistant to Microsoft Entra ID Administrators.\nYou have tools to work with Entra ID. And you have memory.\nUser your memory and tools to answer user's questions. "
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        464,
+        0
+      ],
+      "id": "2eb6e6c8-af07-449e-bd49-92952d2dcfe8",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": "gpt-5.4",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatAzureOpenAi",
+      "typeVersion": 1,
+      "position": [
+        336,
+        192
+      ],
+      "id": "66bfafcc-2031-4a22-ad80-954164febedb",
+      "name": "Azure OpenAI Chat Model",
+      "alwaysOutputData": true,
+      "credentials": {
+        "azureOpenAiApi": {
+          "id": "REPLACE_WITH_AZURE_OPENAI_CREDENTIAL_ID",
+          "name": "REPLACE_WITH_AZURE_OPENAI_CREDENTIAL_NAME"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "endpointUrl": "https://mcp.svc.cloud.microsoft/enterprise",
+        "authentication": "headerAuth",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.mcpClientTool",
+      "typeVersion": 1.2,
+      "position": [
+        768,
+        208
+      ],
+      "id": "374dbd03-dff0-4861-be85-77f14183188b",
+      "name": "MCP Enterprise",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_WITH_MCP_TOKEN_CREDENTIAL_ID",
+          "name": "REPLACE_WITH_MCP_TOKEN_CREDENTIAL_NAME"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "@astaykov/n8n-nodes-entraagentid.entraAgentIdAuthManager",
+      "typeVersion": 1,
+      "position": [
+        208,
+        0
+      ],
+      "id": "95cfdce7-c1cc-4b31-a770-34caf56a463e",
+      "name": "Entra Agent ID Authentication Manager",
+      "credentials": {
+        "entraAgentIDApi": {
+          "id": "REPLACE_WITH_AGENTUSER_OBO_CREDENTIAL_ID",
+          "name": "REPLACE_WITH_AGENTUSER_OBO_CREDENTIAL_NAME"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.output }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        864,
+        0
+      ],
+      "id": "99c7cfbd-4db5-4669-a84a-cc2436793794",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "caef5339-caaa-4228-999d-89abf943bfe2",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "0f1a1086-6861-4e08-b0c7-ff34a3ac5abd",
+      "name": "Webhook",
+      "webhookId": "caef5339-caaa-4228-999d-89abf943bfe2"
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Webhook').item.json.body.sessionId }}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        544,
+        192
+      ],
+      "id": "fe6af9fa-e86d-47f0-be6f-105a637d7028",
+      "name": "Simple Memory"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Azure OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MCP Enterprise": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Entra Agent ID Authentication Manager": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Entra Agent ID Authentication Manager",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "2e16fe63-afd0-442f-abb1-f7498003782d",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "c903f3ec4e7ffc2770c5de96c9ee3886d90ab36287cde9dfe3fd1b63574f9b25"
+  },
+  "id": "_qHs24gDJL3NJxmVuzxUv",
+  "tags": []
+}

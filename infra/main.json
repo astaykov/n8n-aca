@@ -1,0 +1,1382 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+  "languageVersion": "2.0",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.41.2.15936",
+      "templateHash": "7059185926196647045"
+    }
+  },
+  "parameters": {
+    "resourceGroupName": {
+      "type": "string",
+      "defaultValue": "rg-n8n",
+      "metadata": {
+        "description": "Name of the resource group to create (or use if it already exists)."
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "northeurope",
+      "metadata": {
+        "description": "Azure region for all resources."
+      }
+    },
+    "resourceToken": {
+      "type": "string",
+      "defaultValue": "[toLower(uniqueString(subscription().id, parameters('resourceGroupName'), parameters('location')))]",
+      "metadata": {
+        "description": "A unique token used to generate globally unique resource names."
+      }
+    },
+    "fileShareName": {
+      "type": "string",
+      "defaultValue": "n8ndata",
+      "metadata": {
+        "description": "Name of the Azure File share for n8n data directory."
+      }
+    },
+    "postgresAdminPassword": {
+      "type": "securestring",
+      "defaultValue": "[newGuid()]",
+      "metadata": {
+        "description": "PostgreSQL administrator password. If not provided, a random password will be generated."
+      }
+    },
+    "n8nImage": {
+      "type": "string",
+      "defaultValue": "docker.n8n.io/n8nio/n8n:latest",
+      "metadata": {
+        "description": "n8n container image to deploy."
+      }
+    },
+    "cpuCores": {
+      "type": "string",
+      "defaultValue": "1",
+      "metadata": {
+        "description": "CPU cores allocated to the n8n container."
+      }
+    },
+    "memorySize": {
+      "type": "string",
+      "defaultValue": "2Gi",
+      "metadata": {
+        "description": "Memory allocated to the n8n container."
+      }
+    },
+    "entraTenantId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Entra tenant ID where Agent ID objects (Blueprint, Agent Identity, Agent User) will be provisioned. Leave empty to skip Entra setup."
+      }
+    },
+    "spaBlueprintAppId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "OAuth2 app ID (appId) of the Blueprint Service Principal. Set after first Entra provisioning to wire the SPA scope correctly."
+      }
+    },
+    "spaClientId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Client ID of the SPA app registration. Set after first Entra provisioning."
+      }
+    },
+    "openAiDeploymentName": {
+      "type": "string",
+      "defaultValue": "gpt-5.4",
+      "metadata": {
+        "description": "Azure OpenAI model deployment name. Must match the deployment name used in n8n workflow nodes (default: gpt-5.4)."
+      }
+    },
+    "openAiModelName": {
+      "type": "string",
+      "defaultValue": "gpt-4o",
+      "metadata": {
+        "description": "Azure OpenAI model to deploy. Must be available in the target region."
+      }
+    },
+    "openAiModelVersion": {
+      "type": "string",
+      "defaultValue": "2024-11-20",
+      "metadata": {
+        "description": "Azure OpenAI model version."
+      }
+    },
+    "openAiDeploymentSku": {
+      "type": "string",
+      "defaultValue": "GlobalStandard",
+      "metadata": {
+        "description": "Azure OpenAI deployment SKU. Standard works in all regions; GlobalStandard only in select US regions."
+      }
+    },
+    "openAiResourceGroupName": {
+      "type": "string",
+      "defaultValue": "rg-n8n-openai",
+      "metadata": {
+        "description": "Separate resource group for Azure OpenAI (deployed in a US region for model availability)."
+      }
+    },
+    "openAiLocation": {
+      "type": "string",
+      "defaultValue": "eastus2",
+      "metadata": {
+        "description": "Azure region for the Azure OpenAI resource. US regions support GlobalStandard SKU and latest models."
+      }
+    }
+  },
+  "variables": {
+    "tags": {
+      "azd-env-name": "[parameters('resourceToken')]",
+      "application": "n8n"
+    },
+    "webhookPath": "caef5339-caaa-4228-999d-89abf943bfe2"
+  },
+  "resources": {
+    "rg": {
+      "type": "Microsoft.Resources/resourceGroups",
+      "apiVersion": "2024-03-01",
+      "name": "[parameters('resourceGroupName')]",
+      "location": "[parameters('location')]",
+      "tags": "[variables('tags')]"
+    },
+    "openAiRg": {
+      "type": "Microsoft.Resources/resourceGroups",
+      "apiVersion": "2024-03-01",
+      "name": "[parameters('openAiResourceGroupName')]",
+      "location": "[parameters('openAiLocation')]",
+      "tags": "[variables('tags')]"
+    },
+    "postgres": {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "postgres",
+      "resourceGroup": "[parameters('resourceGroupName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "resourceToken": {
+            "value": "[parameters('resourceToken')]"
+          },
+          "adminPassword": {
+            "value": "[parameters('postgresAdminPassword')]"
+          },
+          "tags": {
+            "value": "[variables('tags')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.41.2.15936",
+              "templateHash": "15710324832456650214"
+            }
+          },
+          "parameters": {
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Azure region for all resources"
+              }
+            },
+            "resourceToken": {
+              "type": "string",
+              "metadata": {
+                "description": "Unique suffix for resource names"
+              }
+            },
+            "adminPassword": {
+              "type": "securestring",
+              "metadata": {
+                "description": "PostgreSQL administrator password"
+              }
+            },
+            "tags": {
+              "type": "object",
+              "defaultValue": {},
+              "metadata": {
+                "description": "Tags to apply to all resources"
+              }
+            }
+          },
+          "variables": {
+            "serverName": "[format('psql-n8n-{0}', parameters('resourceToken'))]",
+            "adminUsername": "n8nadmin"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.DBforPostgreSQL/flexibleServers",
+              "apiVersion": "2023-12-01-preview",
+              "name": "[variables('serverName')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "sku": {
+                "name": "Standard_B1ms",
+                "tier": "Burstable"
+              },
+              "properties": {
+                "version": "16",
+                "administratorLogin": "[variables('adminUsername')]",
+                "administratorLoginPassword": "[parameters('adminPassword')]",
+                "storage": {
+                  "storageSizeGB": 32,
+                  "autoGrow": "Disabled"
+                },
+                "backup": {
+                  "backupRetentionDays": 7,
+                  "geoRedundantBackup": "Disabled"
+                },
+                "highAvailability": {
+                  "mode": "Disabled"
+                }
+              }
+            },
+            {
+              "type": "Microsoft.DBforPostgreSQL/flexibleServers/firewallRules",
+              "apiVersion": "2023-12-01-preview",
+              "name": "[format('{0}/{1}', variables('serverName'), 'AllowAllAzureServicesAndResourcesWithinAzureIps')]",
+              "properties": {
+                "startIpAddress": "0.0.0.0",
+                "endIpAddress": "0.0.0.0"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', variables('serverName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.DBforPostgreSQL/flexibleServers/databases",
+              "apiVersion": "2023-12-01-preview",
+              "name": "[format('{0}/{1}', variables('serverName'), 'n8n')]",
+              "properties": {
+                "charset": "UTF8",
+                "collation": "en_US.utf8"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', variables('serverName'))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "serverName": {
+              "type": "string",
+              "value": "[variables('serverName')]"
+            },
+            "serverFqdn": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.DBforPostgreSQL/flexibleServers', variables('serverName')), '2023-12-01-preview').fullyQualifiedDomainName]"
+            },
+            "databaseName": {
+              "type": "string",
+              "value": "n8n"
+            },
+            "adminUsername": {
+              "type": "string",
+              "value": "[variables('adminUsername')]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "rg"
+      ]
+    },
+    "storage": {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "storage",
+      "resourceGroup": "[parameters('resourceGroupName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "resourceToken": {
+            "value": "[parameters('resourceToken')]"
+          },
+          "fileShareName": {
+            "value": "[parameters('fileShareName')]"
+          },
+          "tags": {
+            "value": "[variables('tags')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.41.2.15936",
+              "templateHash": "12374051496905721107"
+            }
+          },
+          "parameters": {
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Azure region for all resources"
+              }
+            },
+            "resourceToken": {
+              "type": "string",
+              "metadata": {
+                "description": "Unique suffix for resource names"
+              }
+            },
+            "fileShareName": {
+              "type": "string",
+              "defaultValue": "n8ndata",
+              "metadata": {
+                "description": "Name of the file share for n8n data directory"
+              }
+            },
+            "tags": {
+              "type": "object",
+              "defaultValue": {},
+              "metadata": {
+                "description": "Tags to apply to all resources"
+              }
+            }
+          },
+          "variables": {
+            "rawName": "[format('st{0}', replace(parameters('resourceToken'), '-', ''))]",
+            "storageAccountName": "[substring(variables('rawName'), 0, min(length(variables('rawName')), 24))]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Storage/storageAccounts",
+              "apiVersion": "2023-05-01",
+              "name": "[variables('storageAccountName')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "kind": "StorageV2",
+              "sku": {
+                "name": "Standard_LRS"
+              },
+              "properties": {
+                "minimumTlsVersion": "TLS1_2",
+                "allowBlobPublicAccess": false,
+                "supportsHttpsTrafficOnly": true
+              }
+            },
+            {
+              "type": "Microsoft.Storage/storageAccounts/fileServices",
+              "apiVersion": "2023-05-01",
+              "name": "[format('{0}/{1}', variables('storageAccountName'), 'default')]",
+              "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Storage/storageAccounts/fileServices/shares",
+              "apiVersion": "2023-05-01",
+              "name": "[format('{0}/{1}/{2}', variables('storageAccountName'), 'default', parameters('fileShareName'))]",
+              "properties": {
+                "shareQuota": 5
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/fileServices', variables('storageAccountName'), 'default')]"
+              ]
+            }
+          ],
+          "outputs": {
+            "storageAccountName": {
+              "type": "string",
+              "value": "[variables('storageAccountName')]"
+            },
+            "storageAccountKey": {
+              "type": "string",
+              "value": "[listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2023-05-01').keys[0].value]"
+            },
+            "fileShareName": {
+              "type": "string",
+              "value": "[parameters('fileShareName')]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "rg"
+      ]
+    },
+    "environment": {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "environment",
+      "resourceGroup": "[parameters('resourceGroupName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "resourceToken": {
+            "value": "[parameters('resourceToken')]"
+          },
+          "storageAccountName": {
+            "value": "[reference('storage').outputs.storageAccountName.value]"
+          },
+          "storageAccountKey": {
+            "value": "[reference('storage').outputs.storageAccountKey.value]"
+          },
+          "fileShareName": {
+            "value": "[reference('storage').outputs.fileShareName.value]"
+          },
+          "tags": {
+            "value": "[variables('tags')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.41.2.15936",
+              "templateHash": "15059283419428197721"
+            }
+          },
+          "parameters": {
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Azure region for all resources"
+              }
+            },
+            "resourceToken": {
+              "type": "string",
+              "metadata": {
+                "description": "Unique suffix for resource names"
+              }
+            },
+            "storageAccountName": {
+              "type": "string",
+              "metadata": {
+                "description": "Storage account name for the Azure File share"
+              }
+            },
+            "storageAccountKey": {
+              "type": "securestring",
+              "metadata": {
+                "description": "Storage account key for Azure File share authentication"
+              }
+            },
+            "fileShareName": {
+              "type": "string",
+              "metadata": {
+                "description": "Name of the Azure File share"
+              }
+            },
+            "tags": {
+              "type": "object",
+              "defaultValue": {},
+              "metadata": {
+                "description": "Tags to apply to all resources"
+              }
+            }
+          },
+          "variables": {
+            "environmentName": "[format('cae-{0}', parameters('resourceToken'))]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.App/managedEnvironments",
+              "apiVersion": "2025-01-01",
+              "name": "[variables('environmentName')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "properties": {}
+            },
+            {
+              "type": "Microsoft.App/managedEnvironments/storages",
+              "apiVersion": "2025-01-01",
+              "name": "[format('{0}/{1}', variables('environmentName'), 'n8ndata')]",
+              "properties": {
+                "azureFile": {
+                  "accountName": "[parameters('storageAccountName')]",
+                  "accountKey": "[parameters('storageAccountKey')]",
+                  "shareName": "[parameters('fileShareName')]",
+                  "accessMode": "ReadWrite"
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.App/managedEnvironments', variables('environmentName'))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "environmentId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.App/managedEnvironments', variables('environmentName'))]"
+            },
+            "environmentName": {
+              "type": "string",
+              "value": "[variables('environmentName')]"
+            },
+            "storageMountName": {
+              "type": "string",
+              "value": "n8ndata"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "rg",
+        "storage"
+      ]
+    },
+    "openAi": {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "openai",
+      "resourceGroup": "[parameters('openAiResourceGroupName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[parameters('openAiLocation')]"
+          },
+          "resourceToken": {
+            "value": "[parameters('resourceToken')]"
+          },
+          "deploymentName": {
+            "value": "[parameters('openAiDeploymentName')]"
+          },
+          "modelName": {
+            "value": "[parameters('openAiModelName')]"
+          },
+          "modelVersion": {
+            "value": "[parameters('openAiModelVersion')]"
+          },
+          "deploymentSku": {
+            "value": "[parameters('openAiDeploymentSku')]"
+          },
+          "tags": {
+            "value": "[variables('tags')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.41.2.15936",
+              "templateHash": "10228920318699436894"
+            }
+          },
+          "parameters": {
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Azure region for all resources"
+              }
+            },
+            "resourceToken": {
+              "type": "string",
+              "metadata": {
+                "description": "Unique suffix for resource names"
+              }
+            },
+            "deploymentName": {
+              "type": "string",
+              "defaultValue": "gpt-5.4",
+              "metadata": {
+                "description": "Name for the Azure OpenAI model deployment. Must match the deployment name referenced in n8n workflow nodes."
+              }
+            },
+            "modelName": {
+              "type": "string",
+              "defaultValue": "gpt-4o",
+              "metadata": {
+                "description": "Azure OpenAI model to deploy (e.g. gpt-4o, gpt-4o-mini)"
+              }
+            },
+            "modelVersion": {
+              "type": "string",
+              "defaultValue": "2024-11-20",
+              "metadata": {
+                "description": "Version of the model to deploy"
+              }
+            },
+            "tpmCapacity": {
+              "type": "int",
+              "defaultValue": 10,
+              "metadata": {
+                "description": "Tokens-per-minute capacity (in thousands). 10 = 10K TPM."
+              }
+            },
+            "deploymentSku": {
+              "type": "string",
+              "defaultValue": "Standard",
+              "metadata": {
+                "description": "Deployment SKU. Use Standard for most regions; GlobalStandard for US regions with higher quota."
+              }
+            },
+            "tags": {
+              "type": "object",
+              "defaultValue": {},
+              "metadata": {
+                "description": "Tags to apply to all resources"
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.CognitiveServices/accounts",
+              "apiVersion": "2024-10-01",
+              "name": "[format('oai-{0}', parameters('resourceToken'))]",
+              "location": "[parameters('location')]",
+              "kind": "OpenAI",
+              "sku": {
+                "name": "S0"
+              },
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "customSubDomainName": "[format('oai-{0}', parameters('resourceToken'))]",
+                "publicNetworkAccess": "Enabled"
+              }
+            },
+            {
+              "type": "Microsoft.CognitiveServices/accounts/deployments",
+              "apiVersion": "2024-10-01",
+              "name": "[format('{0}/{1}', format('oai-{0}', parameters('resourceToken')), parameters('deploymentName'))]",
+              "sku": {
+                "name": "[parameters('deploymentSku')]",
+                "capacity": "[parameters('tpmCapacity')]"
+              },
+              "properties": {
+                "model": {
+                  "format": "OpenAI",
+                  "name": "[parameters('modelName')]",
+                  "version": "[parameters('modelVersion')]"
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.CognitiveServices/accounts', format('oai-{0}', parameters('resourceToken')))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "resourceName": {
+              "type": "string",
+              "value": "[format('oai-{0}', parameters('resourceToken'))]"
+            },
+            "endpoint": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.CognitiveServices/accounts', format('oai-{0}', parameters('resourceToken'))), '2024-10-01').endpoint]"
+            },
+            "apiKey": {
+              "type": "string",
+              "value": "[listKeys(resourceId('Microsoft.CognitiveServices/accounts', format('oai-{0}', parameters('resourceToken'))), '2024-10-01').key1]"
+            },
+            "deploymentName": {
+              "type": "string",
+              "value": "[parameters('deploymentName')]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "openAiRg"
+      ]
+    },
+    "n8nApp": {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "n8n-app",
+      "resourceGroup": "[parameters('resourceGroupName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "resourceToken": {
+            "value": "[parameters('resourceToken')]"
+          },
+          "environmentId": {
+            "value": "[reference('environment').outputs.environmentId.value]"
+          },
+          "storageMountName": {
+            "value": "[reference('environment').outputs.storageMountName.value]"
+          },
+          "postgresHost": {
+            "value": "[reference('postgres').outputs.serverFqdn.value]"
+          },
+          "postgresDatabaseName": {
+            "value": "[reference('postgres').outputs.databaseName.value]"
+          },
+          "postgresUsername": {
+            "value": "[reference('postgres').outputs.adminUsername.value]"
+          },
+          "postgresPassword": {
+            "value": "[parameters('postgresAdminPassword')]"
+          },
+          "n8nImage": {
+            "value": "[parameters('n8nImage')]"
+          },
+          "cpuCores": {
+            "value": "[parameters('cpuCores')]"
+          },
+          "memorySize": {
+            "value": "[parameters('memorySize')]"
+          },
+          "tags": {
+            "value": "[variables('tags')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.41.2.15936",
+              "templateHash": "4879262173911749344"
+            }
+          },
+          "parameters": {
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Azure region for all resources"
+              }
+            },
+            "resourceToken": {
+              "type": "string",
+              "metadata": {
+                "description": "Unique suffix for resource names"
+              }
+            },
+            "environmentId": {
+              "type": "string",
+              "metadata": {
+                "description": "Container Apps Environment resource ID"
+              }
+            },
+            "storageMountName": {
+              "type": "string",
+              "metadata": {
+                "description": "Name of the storage mount registered on the environment for n8n data"
+              }
+            },
+            "postgresHost": {
+              "type": "string",
+              "metadata": {
+                "description": "PostgreSQL server FQDN"
+              }
+            },
+            "postgresDatabaseName": {
+              "type": "string",
+              "metadata": {
+                "description": "PostgreSQL database name"
+              }
+            },
+            "postgresUsername": {
+              "type": "string",
+              "metadata": {
+                "description": "PostgreSQL admin username"
+              }
+            },
+            "postgresPassword": {
+              "type": "securestring",
+              "metadata": {
+                "description": "PostgreSQL admin password"
+              }
+            },
+            "n8nImage": {
+              "type": "string",
+              "defaultValue": "docker.n8n.io/n8nio/n8n:latest",
+              "metadata": {
+                "description": "n8n container image"
+              }
+            },
+            "cpuCores": {
+              "type": "string",
+              "defaultValue": "1",
+              "metadata": {
+                "description": "CPU cores allocated to the container (e.g. 0.5, 1, 2)"
+              }
+            },
+            "memorySize": {
+              "type": "string",
+              "defaultValue": "2Gi",
+              "metadata": {
+                "description": "Memory allocated to the container (e.g. 1Gi, 2Gi)"
+              }
+            },
+            "tags": {
+              "type": "object",
+              "defaultValue": {},
+              "metadata": {
+                "description": "Tags to apply to all resources"
+              }
+            }
+          },
+          "variables": {
+            "appName": "[format('ca-n8n-{0}', parameters('resourceToken'))]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.App/containerApps",
+              "apiVersion": "2025-01-01",
+              "name": "[if(greater(length(variables('appName')), 32), substring(variables('appName'), 0, 32), variables('appName'))]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "managedEnvironmentId": "[parameters('environmentId')]",
+                "configuration": {
+                  "ingress": {
+                    "external": true,
+                    "targetPort": 5678,
+                    "transport": "http",
+                    "allowInsecure": false
+                  }
+                },
+                "template": {
+                  "volumes": [
+                    {
+                      "name": "n8n-data",
+                      "storageName": "[parameters('storageMountName')]",
+                      "storageType": "AzureFile"
+                    }
+                  ],
+                  "containers": [
+                    {
+                      "name": "n8n",
+                      "image": "[parameters('n8nImage')]",
+                      "resources": {
+                        "cpu": "[json(parameters('cpuCores'))]",
+                        "memory": "[parameters('memorySize')]"
+                      },
+                      "command": [
+                        "/bin/sh",
+                        "-c",
+                        "mkdir -p /home/node/.n8n/nodes && cd /home/node/.n8n/nodes && (test -d node_modules/@astaykov/n8n-nodes-entraagentid || npm install @astaykov/n8n-nodes-entraagentid --no-save 2>&1 | head -20) || true; exec n8n"
+                      ],
+                      "env": [
+                        {
+                          "name": "N8N_PORT",
+                          "value": "5678"
+                        },
+                        {
+                          "name": "N8N_PROTOCOL",
+                          "value": "https"
+                        },
+                        {
+                          "name": "WEBHOOK_URL",
+                          "value": "[format('https://{0}.{1}', if(greater(length(variables('appName')), 32), substring(variables('appName'), 0, 32), variables('appName')), reference(resourceId('Microsoft.App/managedEnvironments', last(split(parameters('environmentId'), '/'))), '2025-01-01').defaultDomain)]"
+                        },
+                        {
+                          "name": "N8N_EDITOR_BASE_URL",
+                          "value": "[format('https://{0}.{1}', if(greater(length(variables('appName')), 32), substring(variables('appName'), 0, 32), variables('appName')), reference(resourceId('Microsoft.App/managedEnvironments', last(split(parameters('environmentId'), '/'))), '2025-01-01').defaultDomain)]"
+                        },
+                        {
+                          "name": "GENERIC_TIMEZONE",
+                          "value": "UTC"
+                        },
+                        {
+                          "name": "N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS",
+                          "value": "false"
+                        },
+                        {
+                          "name": "DB_TYPE",
+                          "value": "postgresdb"
+                        },
+                        {
+                          "name": "DB_POSTGRESDB_HOST",
+                          "value": "[parameters('postgresHost')]"
+                        },
+                        {
+                          "name": "DB_POSTGRESDB_PORT",
+                          "value": "5432"
+                        },
+                        {
+                          "name": "DB_POSTGRESDB_DATABASE",
+                          "value": "[parameters('postgresDatabaseName')]"
+                        },
+                        {
+                          "name": "DB_POSTGRESDB_USER",
+                          "value": "[parameters('postgresUsername')]"
+                        },
+                        {
+                          "name": "DB_POSTGRESDB_PASSWORD",
+                          "value": "[parameters('postgresPassword')]"
+                        },
+                        {
+                          "name": "DB_POSTGRESDB_SSL_ENABLED",
+                          "value": "true"
+                        },
+                        {
+                          "name": "DB_POSTGRESDB_SSL_REJECT_UNAUTHORIZED",
+                          "value": "false"
+                        },
+                        {
+                          "name": "N8N_PUBLIC_API_DISABLED",
+                          "value": "false"
+                        },
+                        {
+                          "name": "N8N_COMMUNITY_PACKAGES_ALLOW_TOOL_USAGE",
+                          "value": "true"
+                        }
+                      ],
+                      "volumeMounts": [
+                        {
+                          "volumeName": "n8n-data",
+                          "mountPath": "/home/node/.n8n"
+                        }
+                      ]
+                    }
+                  ],
+                  "scale": {
+                    "minReplicas": 1,
+                    "maxReplicas": 1
+                  }
+                }
+              }
+            }
+          ],
+          "outputs": {
+            "appUrl": {
+              "type": "string",
+              "value": "[format('https://{0}', reference(resourceId('Microsoft.App/containerApps', if(greater(length(variables('appName')), 32), substring(variables('appName'), 0, 32), variables('appName'))), '2025-01-01').configuration.ingress.fqdn)]"
+            },
+            "appName": {
+              "type": "string",
+              "value": "[if(greater(length(variables('appName')), 32), substring(variables('appName'), 0, 32), variables('appName'))]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "environment",
+        "postgres",
+        "rg"
+      ]
+    },
+    "acr": {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "acr",
+      "resourceGroup": "[parameters('resourceGroupName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "resourceToken": {
+            "value": "[parameters('resourceToken')]"
+          },
+          "tags": {
+            "value": "[variables('tags')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.41.2.15936",
+              "templateHash": "17399690592439450317"
+            }
+          },
+          "parameters": {
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Azure region for all resources"
+              }
+            },
+            "resourceToken": {
+              "type": "string",
+              "metadata": {
+                "description": "Unique suffix for resource names"
+              }
+            },
+            "tags": {
+              "type": "object",
+              "defaultValue": {},
+              "metadata": {
+                "description": "Tags to apply to all resources"
+              }
+            }
+          },
+          "variables": {
+            "registryName": "[take(format('acr{0}', replace(parameters('resourceToken'), '-', '')), 50)]"
+          },
+          "resources": {
+            "registry": {
+              "type": "Microsoft.ContainerRegistry/registries",
+              "apiVersion": "2023-11-01-preview",
+              "name": "[variables('registryName')]",
+              "location": "[parameters('location')]",
+              "tags": "[union(parameters('tags'), createObject('azd-env-name', parameters('resourceToken')))]",
+              "sku": {
+                "name": "Basic"
+              },
+              "properties": {
+                "adminUserEnabled": true
+              }
+            }
+          },
+          "outputs": {
+            "registryId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.ContainerRegistry/registries', variables('registryName'))]"
+            },
+            "registryName": {
+              "type": "string",
+              "value": "[variables('registryName')]"
+            },
+            "loginServer": {
+              "type": "string",
+              "value": "[reference('registry').loginServer]"
+            },
+            "adminUsername": {
+              "type": "string",
+              "value": "[listCredentials('registry', '2023-11-01-preview').username]"
+            },
+            "adminPassword": {
+              "type": "securestring",
+              "value": "[listCredentials('registry', '2023-11-01-preview').passwords[0].value]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "rg"
+      ]
+    },
+    "spa": {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "spa",
+      "resourceGroup": "[parameters('resourceGroupName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "resourceToken": {
+            "value": "[parameters('resourceToken')]"
+          },
+          "environmentId": {
+            "value": "[reference('environment').outputs.environmentId.value]"
+          },
+          "registryLoginServer": {
+            "value": "[reference('acr').outputs.loginServer.value]"
+          },
+          "registryUsername": {
+            "value": "[reference('acr').outputs.adminUsername.value]"
+          },
+          "registryPassword": {
+            "value": "[listOutputsWithSecureValues('acr', '2025-04-01').adminPassword]"
+          },
+          "spaClientId": {
+            "value": "[parameters('spaClientId')]"
+          },
+          "tenantId": {
+            "value": "[parameters('entraTenantId')]"
+          },
+          "blueprintAppId": {
+            "value": "[parameters('spaBlueprintAppId')]"
+          },
+          "n8nWebhookUrl": {
+            "value": "[format('{0}/webhook/{1}', reference('n8nApp').outputs.appUrl.value, variables('webhookPath'))]"
+          },
+          "n8nWebhookTestUrl": {
+            "value": "[format('{0}/webhook-test/{1}', reference('n8nApp').outputs.appUrl.value, variables('webhookPath'))]"
+          },
+          "tags": {
+            "value": "[variables('tags')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.41.2.15936",
+              "templateHash": "8510533493056083615"
+            }
+          },
+          "parameters": {
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Azure region for all resources"
+              }
+            },
+            "resourceToken": {
+              "type": "string",
+              "metadata": {
+                "description": "Unique suffix for resource names"
+              }
+            },
+            "environmentId": {
+              "type": "string",
+              "metadata": {
+                "description": "Container Apps Environment resource ID"
+              }
+            },
+            "registryLoginServer": {
+              "type": "string",
+              "metadata": {
+                "description": "ACR login server (e.g. acr1234.azurecr.io)"
+              }
+            },
+            "registryUsername": {
+              "type": "string",
+              "metadata": {
+                "description": "ACR admin username"
+              }
+            },
+            "registryPassword": {
+              "type": "securestring",
+              "metadata": {
+                "description": "ACR admin password"
+              }
+            },
+            "spaClientId": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Entra app registration client ID for the SPA (MSAL clientId)."
+              }
+            },
+            "tenantId": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Entra tenant ID."
+              }
+            },
+            "blueprintAppId": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Blueprint OAuth2 app ID (NOT the Blueprint object ID).\nUsed to construct the API scope: api://<blueprintAppId>/access_as_user.\n"
+              }
+            },
+            "n8nWebhookUrl": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "n8n production webhook URL for the OBO workflow."
+              }
+            },
+            "n8nWebhookTestUrl": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "n8n test webhook URL for the OBO workflow."
+              }
+            },
+            "tags": {
+              "type": "object",
+              "defaultValue": {},
+              "metadata": {
+                "description": "Tags to apply to all resources"
+              }
+            }
+          },
+          "variables": {
+            "appName": "[take(format('ca-spa-{0}', parameters('resourceToken')), 32)]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.App/containerApps",
+              "apiVersion": "2025-01-01",
+              "name": "[variables('appName')]",
+              "location": "[parameters('location')]",
+              "tags": "[union(parameters('tags'), createObject('azd-service-name', 'spa'))]",
+              "properties": {
+                "managedEnvironmentId": "[parameters('environmentId')]",
+                "configuration": {
+                  "ingress": {
+                    "external": true,
+                    "targetPort": 80,
+                    "transport": "http",
+                    "allowInsecure": false
+                  },
+                  "registries": [
+                    {
+                      "server": "[parameters('registryLoginServer')]",
+                      "username": "[parameters('registryUsername')]",
+                      "passwordSecretRef": "registry-password"
+                    }
+                  ],
+                  "secrets": [
+                    {
+                      "name": "registry-password",
+                      "value": "[parameters('registryPassword')]"
+                    }
+                  ]
+                },
+                "template": {
+                  "containers": [
+                    {
+                      "name": "spa",
+                      "image": "mcr.microsoft.com/azuredocs/containerapps-helloworld:latest",
+                      "resources": {
+                        "cpu": "[json('0.25')]",
+                        "memory": "0.5Gi"
+                      },
+                      "env": [
+                        {
+                          "name": "SPA_CLIENT_ID",
+                          "value": "[parameters('spaClientId')]"
+                        },
+                        {
+                          "name": "SPA_TENANT_ID",
+                          "value": "[parameters('tenantId')]"
+                        },
+                        {
+                          "name": "SPA_REDIRECT_URI",
+                          "value": "[format('https://{0}/redirect.html', format('{0}.{1}', variables('appName'), reference(resourceId('Microsoft.App/managedEnvironments', last(split(parameters('environmentId'), '/'))), '2025-01-01').defaultDomain))]"
+                        },
+                        {
+                          "name": "SPA_BLUEPRINT_APP_ID",
+                          "value": "[parameters('blueprintAppId')]"
+                        },
+                        {
+                          "name": "N8N_WEBHOOK_URL",
+                          "value": "[parameters('n8nWebhookUrl')]"
+                        },
+                        {
+                          "name": "N8N_WEBHOOK_TEST_URL",
+                          "value": "[parameters('n8nWebhookTestUrl')]"
+                        }
+                      ]
+                    }
+                  ],
+                  "scale": {
+                    "minReplicas": 0,
+                    "maxReplicas": 1
+                  }
+                }
+              }
+            }
+          ],
+          "outputs": {
+            "appUrl": {
+              "type": "string",
+              "value": "[format('https://{0}', reference(resourceId('Microsoft.App/containerApps', variables('appName')), '2025-01-01').configuration.ingress.fqdn)]"
+            },
+            "appName": {
+              "type": "string",
+              "value": "[variables('appName')]"
+            },
+            "appFqdn": {
+              "type": "string",
+              "value": "[format('{0}.{1}', variables('appName'), reference(resourceId('Microsoft.App/managedEnvironments', last(split(parameters('environmentId'), '/'))), '2025-01-01').defaultDomain)]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "acr",
+        "environment",
+        "n8nApp",
+        "rg"
+      ]
+    }
+  },
+  "outputs": {
+    "N8N_URL": {
+      "type": "string",
+      "value": "[reference('n8nApp').outputs.appUrl.value]"
+    },
+    "CONTAINER_APP_NAME": {
+      "type": "string",
+      "value": "[reference('n8nApp').outputs.appName.value]"
+    },
+    "POSTGRES_SERVER": {
+      "type": "string",
+      "value": "[reference('postgres').outputs.serverName.value]"
+    },
+    "POSTGRES_DATABASE": {
+      "type": "string",
+      "value": "[reference('postgres').outputs.databaseName.value]"
+    },
+    "STORAGE_ACCOUNT_NAME": {
+      "type": "string",
+      "value": "[reference('storage').outputs.storageAccountName.value]"
+    },
+    "ENTRA_TENANT_ID": {
+      "type": "string",
+      "value": "[parameters('entraTenantId')]"
+    },
+    "AZURE_OPENAI_RESOURCE": {
+      "type": "string",
+      "value": "[reference('openAi').outputs.resourceName.value]"
+    },
+    "AZURE_OPENAI_API_KEY": {
+      "type": "string",
+      "value": "[reference('openAi').outputs.apiKey.value]"
+    },
+    "AZURE_OPENAI_DEPLOYMENT": {
+      "type": "string",
+      "value": "[reference('openAi').outputs.deploymentName.value]"
+    },
+    "AZURE_CONTAINER_REGISTRY_ENDPOINT": {
+      "type": "string",
+      "value": "[reference('acr').outputs.loginServer.value]"
+    },
+    "ACR_NAME": {
+      "type": "string",
+      "value": "[reference('acr').outputs.registryName.value]"
+    },
+    "SPA_URL": {
+      "type": "string",
+      "value": "[reference('spa').outputs.appUrl.value]"
+    },
+    "SPA_APP_NAME": {
+      "type": "string",
+      "value": "[reference('spa').outputs.appName.value]"
+    },
+    "SPA_FQDN": {
+      "type": "string",
+      "value": "[reference('spa').outputs.appFqdn.value]"
+    }
+  }
+}

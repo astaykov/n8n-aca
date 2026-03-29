@@ -1,0 +1,217 @@
+{
+  "name": "Agent ID Auth Manager - Agent User with MCP Enterprise",
+  "nodes": [
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('When chat message received').item.json.chatInput }}",
+        "options": {
+          "systemMessage": "=You are a helpful assistant to Microsoft Entra ID Administrators.\nYou have tools to work with Entra ID. And you have memory.\nUser your memory and tools to answer user's questions. "
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        -544,
+        -32
+      ],
+      "id": "672afbdb-1ea3-47aa-a622-571694bf887a",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": "gpt-5.4",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatAzureOpenAi",
+      "typeVersion": 1,
+      "position": [
+        -704,
+        176
+      ],
+      "id": "25321d75-abcf-4bfe-9e71-bb129b42ce5a",
+      "name": "Azure OpenAI Chat Model",
+      "alwaysOutputData": true,
+      "credentials": {
+        "azureOpenAiApi": {
+          "id": "REPLACE_WITH_AZURE_OPENAI_CREDENTIAL_ID",
+          "name": "REPLACE_WITH_AZURE_OPENAI_CREDENTIAL_NAME"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "contextWindowLength": 10
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        -576,
+        176
+      ],
+      "id": "f8cb0aa5-1727-4d9e-8f9a-cd1c55c73afc",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "public": true,
+        "mode": "webhook",
+        "availableInChat": true,
+        "agentName": "Entra Friend",
+        "options": {
+          "responseMode": "streaming"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        -1312,
+        -32
+      ],
+      "id": "c2752f54-add8-4e17-8c10-fd4c425c5c86",
+      "name": "When chat message received",
+      "webhookId": "b28eebd4-3e50-4a9b-b7a0-2a2830744fc9"
+    },
+    {
+      "parameters": {
+        "endpointUrl": "https://mcp.svc.cloud.microsoft/enterprise",
+        "authentication": "headerAuth",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.mcpClientTool",
+      "typeVersion": 1.2,
+      "position": [
+        -288,
+        176
+      ],
+      "id": "fd654e17-4ab0-42c6-a1d2-862f2b42a080",
+      "name": "MCP Enterprise",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_WITH_MCP_TOKEN_CREDENTIAL_ID",
+          "name": "REPLACE_WITH_MCP_TOKEN_CREDENTIAL_NAME"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "enableTokenCache": false
+      },
+      "type": "@astaykov/n8n-nodes-entraagentid.entraAgentIdAuthManager",
+      "typeVersion": 1,
+      "position": [
+        -976,
+        -32
+      ],
+      "id": "61c20a5b-c1c2-4e16-a651-1e4d9f80f80e",
+      "name": "Entra Agent ID Authentication Manager",
+      "credentials": {
+        "entraAgentIDApi": {
+          "id": "REPLACE_WITH_AGENTUSER_OBO_CREDENTIAL_ID",
+          "name": "REPLACE_WITH_AGENTUSER_OBO_CREDENTIAL_NAME"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "endpointUrl": "https://learn.microsoft.com/api/mcp",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.mcpClientTool",
+      "typeVersion": 1.2,
+      "position": [
+        -432,
+        176
+      ],
+      "id": "1b49ef0a-ccbd-407f-8a5d-a0f8a0a199f1",
+      "name": "Microsoft Learn"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Azure OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "Entra Agent ID Authentication Manager",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        []
+      ]
+    },
+    "MCP Enterprise": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Entra Agent ID Authentication Manager": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Microsoft Learn": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "567d1a48-33fd-4fed-9dba-fe2e1322fed1",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "c903f3ec4e7ffc2770c5de96c9ee3886d90ab36287cde9dfe3fd1b63574f9b25"
+  },
+  "id": "coZF_3DerEV48B-4BQ01F",
+  "tags": []
+}

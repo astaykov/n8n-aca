@@ -65,13 +65,20 @@ resource n8nApp 'Microsoft.App/containerApps@2025-01-01' = {
         }
       ]
       containers: [
-        {
+        {  
           name: 'n8n'
           image: n8nImage
           resources: {
             cpu: json(cpuCores)
             memory: memorySize
           }
+          // On startup: install community node into the Azure Files mount, then launch n8n.
+          // The node_modules directory persists on Azure Files so reinstalls are skipped on restart.
+          command: [
+            '/bin/sh'
+            '-c'
+            'mkdir -p /home/node/.n8n/nodes && cd /home/node/.n8n/nodes && (test -d node_modules/@astaykov/n8n-nodes-entraagentid || npm install @astaykov/n8n-nodes-entraagentid --no-save 2>&1 | head -20) || true; exec n8n'
+          ]
           env: [
             {
               name: 'N8N_PORT'
@@ -133,6 +140,16 @@ resource n8nApp 'Microsoft.App/containerApps@2025-01-01' = {
             {
               name: 'DB_POSTGRESDB_SSL_REJECT_UNAUTHORIZED'
               value: 'false'
+            }
+            // Enable the public REST API (required for workflow import and API key creation)
+            {
+              name: 'N8N_PUBLIC_API_DISABLED'
+              value: 'false'
+            }
+            // Allow community nodes (e.g. @astaykov/n8n-nodes-EntraAgentID) to be used as AI tools
+            {
+              name: 'N8N_COMMUNITY_PACKAGES_ALLOW_TOOL_USAGE'
+              value: 'true'
             }
           ]
           volumeMounts: [
