@@ -43,6 +43,12 @@ param openAiModelVersion string = '2024-11-20'
 @description('Azure OpenAI deployment SKU. Standard works in all regions; GlobalStandard only in select US regions.')
 param openAiDeploymentSku string = 'GlobalStandard'
 
+@description('Tokens-per-minute capacity (in thousands). 230 = 230K TPM.')
+param openAiTpmCapacity int = 230
+
+@description('Separate resource group for Azure OpenAI (deployed in a US region for model availability).')
+param openAiResourceGroupName string = 'rg-n8n-openai'
+
 @description('Azure region for the Azure OpenAI resource. US regions support GlobalStandard SKU and latest models.')
 param openAiLocation string = 'eastus2'
 
@@ -97,6 +103,7 @@ module openAi 'modules/openai.bicep' = {
     modelName: openAiModelName
     modelVersion: openAiModelVersion
     deploymentSku: openAiDeploymentSku
+    tpmCapacity: openAiTpmCapacity
     tags: tags
   }
 }

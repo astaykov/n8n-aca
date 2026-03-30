@@ -26,3 +26,4 @@ hooks:
     # Reads N8N_URL and ENTRA_TENANT_ID from azd environment (set by Bicep outputs).
     shell: pwsh
     run: ./scripts/postprovision.ps1
+    interactive: true

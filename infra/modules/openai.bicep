@@ -13,8 +13,8 @@ param modelName string = 'gpt-4o'
 @description('Version of the model to deploy')
 param modelVersion string = '2024-11-20'
 
-@description('Tokens-per-minute capacity (in thousands). 10 = 10K TPM.')
-param tpmCapacity int = 10
+@description('Tokens-per-minute capacity (in thousands). 230 = 230K TPM.')
+param tpmCapacity int = 230
 
 @description('Deployment SKU. Use Standard for most regions; GlobalStandard for US regions with higher quota.')
 param deploymentSku string = 'Standard'
