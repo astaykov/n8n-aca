@@ -118,7 +118,7 @@ param(
     [string]$AzureOpenAiApiVersion = '2024-12-01-preview',
 
     [Parameter(Mandatory = $false)]
-    [string]$AzureOpenAiDeployment = 'gpt-5.4'
+    [string]$AzureOpenAiDeployment = 'gpt-4o'
 )
 
 Set-StrictMode -Version Latest

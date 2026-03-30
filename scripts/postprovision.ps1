@@ -33,6 +33,10 @@ $spaFqdn    = $env:SPA_FQDN
 $spaAppName = $env:SPA_APP_NAME
 $rgName     = $env:AZURE_RESOURCE_GROUP
 
+# n8n owner account credentials
+$ownerEmail    = 'admin@contoso.com'
+$ownerPassword = 'N8nAdm1n!Test'
+
 if (-not $n8nUrl) {
     Write-Error "N8N_URL environment variable is not set. Ensure azd provision completed successfully."
     exit 1
@@ -74,6 +78,8 @@ if ($tenantId) {
     $entraRaw = & "$scriptsDir\Run-All.ps1" `
         -TenantId        $tenantId `
         -N8nUrl          $n8nUrl `
+        -OwnerEmail      $ownerEmail `
+        -OwnerPassword   $ownerPassword `
         -SkipNodeInstall `
         @resumeParams `
         @openAiParams
@@ -135,10 +141,10 @@ if ($tenantId) {
 
     # n8n-only: configure owner, import workflows, still create Azure OpenAI credential if available
     $noEntraParams = @{
-        N8nUrl              = $n8nUrl
-        OwnerEmail          = 'admin@contoso.com'
-        OwnerPassword       = 'N8nAdm1n!Test'
-        SkipNodeInstall     = $true
+        N8nUrl               = $n8nUrl
+        OwnerEmail           = $ownerEmail
+        OwnerPassword        = $ownerPassword
+        SkipNodeInstall      = $true
         SkipCredentialCreate = $true
     }
     if ($openAiResource)   { $noEntraParams['AzureOpenAiResourceName'] = $openAiResource }
@@ -147,3 +153,17 @@ if ($tenantId) {
 
     & "$scriptsDir\Configure-N8n.ps1" @noEntraParams
 }
+
+# ── Final summary ─────────────────────────────────────────────────────────────
+Write-Host ""
+Write-Host ("=" * 70) -ForegroundColor Green
+Write-Host "  DEPLOYMENT COMPLETE" -ForegroundColor Green
+Write-Host ("=" * 70) -ForegroundColor Green
+Write-Host "  n8n URL  : $n8nUrl" -ForegroundColor White
+Write-Host "  Username : $ownerEmail" -ForegroundColor White
+Write-Host "  Password : $ownerPassword" -ForegroundColor White
+if ($spaFqdn) {
+    Write-Host "  SPA URL  : https://$spaFqdn" -ForegroundColor White
+}
+Write-Host ("=" * 70) -ForegroundColor Green
+Write-Host ""
