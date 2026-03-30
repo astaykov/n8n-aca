@@ -42,7 +42,7 @@
       "value": "eastus2"
     },
     "openAiTpmCapacity": {
-      "value": 230
+      "value": 200
     }
   }
 }
