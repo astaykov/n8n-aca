@@ -1,20 +1,10 @@
-targetScope = 'subscription'
-
-@description('Name of the resource group to create (or use if it already exists).')
-param resourceGroupName string = 'rg-n8n'
+targetScope = 'resourceGroup'
 
 @description('Azure region for all resources.')
 param location string = 'northeurope'
 
-// Create the resource group if it does not already exist
-resource rg 'Microsoft.Resources/resourceGroups@2024-03-01' = {
-  name: resourceGroupName
-  location: location
-  tags: tags
-}
-
 @description('A unique token used to generate globally unique resource names.')
-param resourceToken string = toLower(uniqueString(subscription().id, resourceGroupName, location))
+param resourceToken string = toLower(uniqueString(resourceGroup().id, location))
 
 @description('Name of the Azure File share for n8n data directory.')
 param fileShareName string = 'n8ndata'
@@ -53,18 +43,8 @@ param openAiModelVersion string = '2024-11-20'
 @description('Azure OpenAI deployment SKU. Standard works in all regions; GlobalStandard only in select US regions.')
 param openAiDeploymentSku string = 'GlobalStandard'
 
-@description('Separate resource group for Azure OpenAI (deployed in a US region for model availability).')
-param openAiResourceGroupName string = 'rg-n8n-openai'
-
 @description('Azure region for the Azure OpenAI resource. US regions support GlobalStandard SKU and latest models.')
 param openAiLocation string = 'eastus2'
-
-// Create the OpenAI resource group in the target US region
-resource openAiRg 'Microsoft.Resources/resourceGroups@2024-03-01' = {
-  name: openAiResourceGroupName
-  location: openAiLocation
-  tags: tags
-}
 
 var tags = {
   'azd-env-name': resourceToken
@@ -75,7 +55,6 @@ var tags = {
 // ── PostgreSQL Database ────────────────────────────────────────────────────
 module postgres 'modules/postgres.bicep' = {
   name: 'postgres'
-  scope: rg
   params: {
     location: location
     resourceToken: resourceToken
@@ -87,7 +66,6 @@ module postgres 'modules/postgres.bicep' = {
 // ── Storage Account + File Share (for custom nodes) ───────────────────────
 module storage 'modules/storage.bicep' = {
   name: 'storage'
-  scope: rg
   params: {
     location: location
     resourceToken: resourceToken
@@ -99,7 +77,6 @@ module storage 'modules/storage.bicep' = {
 // ── Container Apps Environment + Storage Mount ─────────────────────────────
 module environment 'modules/environment.bicep' = {
   name: 'environment'
-  scope: rg
   params: {
     location: location
     resourceToken: resourceToken
@@ -113,7 +90,6 @@ module environment 'modules/environment.bicep' = {
 // ── Azure OpenAI ─────────────────────────────────────────────────────────────
 module openAi 'modules/openai.bicep' = {
   name: 'openai'
-  scope: openAiRg
   params: {
     location: openAiLocation
     resourceToken: resourceToken
@@ -128,7 +104,6 @@ module openAi 'modules/openai.bicep' = {
 // ── n8n Container App ──────────────────────────────────────────────────────
 module n8nApp 'modules/n8n-app.bicep' = {
   name: 'n8n-app'
-  scope: rg
   params: {
     location: location
     resourceToken: resourceToken
@@ -148,7 +123,6 @@ module n8nApp 'modules/n8n-app.bicep' = {
 // ── Azure Container Registry ──────────────────────────────────────────────
 module acr 'modules/acr.bicep' = {
   name: 'acr'
-  scope: rg
   params: {
     location: location
     resourceToken: resourceToken
@@ -161,7 +135,6 @@ module acr 'modules/acr.bicep' = {
 var webhookPath = 'caef5339-caaa-4228-999d-89abf943bfe2'
 module spa 'modules/spa.bicep' = {
   name: 'spa'
-  scope: rg
   params: {
     location: location
     resourceToken: resourceToken
@@ -179,20 +152,22 @@ module spa 'modules/spa.bicep' = {
 }
 
 // ── Outputs ────────────────────────────────────────────────────────────────
-output AZURE_RESOURCE_GROUP string = resourceGroupName
 output N8N_URL string = n8nApp.outputs.appUrl
 output CONTAINER_APP_NAME string = n8nApp.outputs.appName
 output POSTGRES_SERVER string = postgres.outputs.serverName
 output POSTGRES_DATABASE string = postgres.outputs.databaseName
 output STORAGE_ACCOUNT_NAME string = storage.outputs.storageAccountName
 output ENTRA_TENANT_ID string = entraTenantId
+
 // Azure OpenAI — used by postprovision.ps1 to create the azureOpenAiApi credential in n8n
 output AZURE_OPENAI_RESOURCE string = openAi.outputs.resourceName
 output AZURE_OPENAI_API_KEY string = openAi.outputs.apiKey
 output AZURE_OPENAI_DEPLOYMENT string = openAi.outputs.deploymentName
+
 // ACR — used by `azd deploy spa` to push the SPA Docker image
 output AZURE_CONTAINER_REGISTRY_ENDPOINT string = acr.outputs.loginServer
 output ACR_NAME string = acr.outputs.registryName
+
 // SPA — used by postprovision.ps1 to update env vars after Entra provisioning
 output SPA_URL string = spa.outputs.appUrl
 output SPA_APP_NAME string = spa.outputs.appName
