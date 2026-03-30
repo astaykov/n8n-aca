@@ -122,11 +122,15 @@ function appendMessage(type, text) {
     const label      = isUser ? '<i class="bi bi-person-fill"></i> You' : '<i class="bi bi-robot"></i> Agent';
     const ts         = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
+    const renderBody = (isUser || isError || isThinking)
+        ? escapeHtml(text)
+        : DOMPurify.sanitize(marked.parse(text));
+
     const div       = document.createElement('div');
     div.id          = id;
     div.className   = 'msg ' + msgClass;
     div.innerHTML   = '<div class="label">' + label + '</div>'
-                    + '<div class="bubble">' + escapeHtml(text) + '</div>'
+                    + '<div class="bubble">' + renderBody + '</div>'
                     + '<div class="ts">' + ts + '</div>';
 
     document.getElementById('messages').appendChild(div);

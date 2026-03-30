@@ -40,6 +40,9 @@
     },
     "openAiLocation": {
       "value": "eastus2"
+    },
+    "openAiTpmCapacity": {
+      "value": 230
     }
   }
 }
