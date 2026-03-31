@@ -32,6 +32,9 @@ param cpuCores string = '1'
 @description('Memory allocated to the container (e.g. 1Gi, 2Gi)')
 param memorySize string = '2Gi'
 
+@description('Allowed CORS origin for the n8n webhook API. Set to the SPA URL so browser requests are accepted.')
+param corsOrigin string
+
 @description('Tags to apply to all resources')
 param tags object = {}
 
@@ -150,6 +153,11 @@ resource n8nApp 'Microsoft.App/containerApps@2025-01-01' = {
             {
               name: 'N8N_COMMUNITY_PACKAGES_ALLOW_TOOL_USAGE'
               value: 'true'
+            }
+            // Allow cross-origin requests from the SPA (Static Web App on a different domain)
+            {
+              name: 'N8N_CORS_ORIGIN'
+              value: corsOrigin
             }
           ]
           volumeMounts: [

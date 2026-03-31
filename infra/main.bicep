@@ -1,7 +1,13 @@
 targetScope = 'resourceGroup'
 
-@description('Azure region for all resources.')
+@description('Azure region for most resources.')
 param location string = 'northeurope'
+
+@description('Azure region for the Azure OpenAI resource. US regions support GlobalStandard SKU and latest models.')
+param openAiLocation string = 'eastus2'
+
+@description('Azure region for the PostgreSQL flexible server.')
+param swaLocation string = 'westeurope'
 
 @description('A unique token used to generate globally unique resource names.')
 param resourceToken string = toLower(uniqueString(resourceGroup().id, location))
@@ -25,14 +31,8 @@ param memorySize string = '2Gi'
 @description('Entra tenant ID where Agent ID objects (Blueprint, Agent Identity, Agent User) will be provisioned. Leave empty to skip Entra setup.')
 param entraTenantId string = ''
 
-@description('OAuth2 app ID (appId) of the Blueprint Service Principal. Set after first Entra provisioning to wire the SPA scope correctly.')
-param spaBlueprintAppId string = ''
-
-@description('Client ID of the SPA app registration. Set after first Entra provisioning.')
-param spaClientId string = ''
-
 @description('Azure OpenAI model deployment name. Must match the deployment name used in n8n workflow nodes (default: gpt-5.4).')
-param openAiDeploymentName string = 'gpt-5.4'
+param openAiDeploymentName string = 'gpt-4o'
 
 @description('Azure OpenAI model to deploy. Must be available in the target region.')
 param openAiModelName string = 'gpt-4o'
@@ -43,14 +43,8 @@ param openAiModelVersion string = '2024-11-20'
 @description('Azure OpenAI deployment SKU. Standard works in all regions; GlobalStandard only in select US regions.')
 param openAiDeploymentSku string = 'GlobalStandard'
 
-@description('Tokens-per-minute capacity (in thousands). 230 = 230K TPM.')
-param openAiTpmCapacity int = 230
-
-@description('Separate resource group for Azure OpenAI (deployed in a US region for model availability).')
-param openAiResourceGroupName string = 'rg-n8n-openai'
-
-@description('Azure region for the Azure OpenAI resource. US regions support GlobalStandard SKU and latest models.')
-param openAiLocation string = 'eastus2'
+@description('Tokens-per-minute capacity (in thousands). 50 = 50K TPM.')
+param openAiTpmCapacity int = 50
 
 var tags = {
   'azd-env-name': resourceToken
@@ -108,6 +102,16 @@ module openAi 'modules/openai.bicep' = {
   }
 }
 
+// ── Azure Static Web App (Test SPA) ──────────────────────────────────────
+module swa 'modules/swa.bicep' = {
+  name: 'swa'
+  params: {
+    swaLocation: swaLocation
+    resourceToken: resourceToken
+    tags: tags
+  }
+}
+
 // ── n8n Container App ──────────────────────────────────────────────────────
 module n8nApp 'modules/n8n-app.bicep' = {
   name: 'n8n-app'
@@ -123,37 +127,7 @@ module n8nApp 'modules/n8n-app.bicep' = {
     n8nImage: n8nImage
     cpuCores: cpuCores
     memorySize: memorySize
-    tags: tags
-  }
-}
-
-// ── Azure Container Registry ──────────────────────────────────────────────
-module acr 'modules/acr.bicep' = {
-  name: 'acr'
-  params: {
-    location: location
-    resourceToken: resourceToken
-    tags: tags
-  }
-}
-
-// ── Test SPA Container App ─────────────────────────────────────────────────
-// Webhook path is fixed by the workflow JSON (deterministic on every import).
-var webhookPath = 'caef5339-caaa-4228-999d-89abf943bfe2'
-module spa 'modules/spa.bicep' = {
-  name: 'spa'
-  params: {
-    location: location
-    resourceToken: resourceToken
-    environmentId: environment.outputs.environmentId
-    registryLoginServer: acr.outputs.loginServer
-    registryUsername: acr.outputs.adminUsername
-    registryPassword: acr.outputs.adminPassword
-    spaClientId: spaClientId
-    tenantId: entraTenantId
-    blueprintAppId: spaBlueprintAppId
-    n8nWebhookUrl: '${n8nApp.outputs.appUrl}/webhook/${webhookPath}'
-    n8nWebhookTestUrl: '${n8nApp.outputs.appUrl}/webhook-test/${webhookPath}'
+    corsOrigin: 'https://${swa.outputs.defaultHostname}'
     tags: tags
   }
 }
@@ -171,11 +145,6 @@ output AZURE_OPENAI_RESOURCE string = openAi.outputs.resourceName
 output AZURE_OPENAI_API_KEY string = openAi.outputs.apiKey
 output AZURE_OPENAI_DEPLOYMENT string = openAi.outputs.deploymentName
 
-// ACR — used by `azd deploy spa` to push the SPA Docker image
-output AZURE_CONTAINER_REGISTRY_ENDPOINT string = acr.outputs.loginServer
-output ACR_NAME string = acr.outputs.registryName
-
-// SPA — used by postprovision.ps1 to update env vars after Entra provisioning
-output SPA_URL string = spa.outputs.appUrl
-output SPA_APP_NAME string = spa.outputs.appName
-output SPA_FQDN string = spa.outputs.appFqdn
+// SWA — used by postprovision.ps1 to generate authConfig.js and configure Entra redirect URIs
+output SWA_HOSTNAME string = swa.outputs.defaultHostname
+output SWA_URL string = swa.outputs.appUrl

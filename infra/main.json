@@ -115,13 +115,6 @@
         "description": "Azure OpenAI deployment SKU. Standard works in all regions; GlobalStandard only in select US regions."
       }
     },
-    "openAiResourceGroupName": {
-      "type": "string",
-      "defaultValue": "rg-n8n-openai",
-      "metadata": {
-        "description": "Separate resource group for Azure OpenAI (deployed in a US region for model availability)."
-      }
-    },
     "openAiLocation": {
       "type": "string",
       "defaultValue": "eastus2",

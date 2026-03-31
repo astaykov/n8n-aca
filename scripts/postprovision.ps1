@@ -28,10 +28,8 @@ $openAiResource   = $env:AZURE_OPENAI_RESOURCE
 $openAiApiKey     = $env:AZURE_OPENAI_API_KEY
 $openAiDeployment = $env:AZURE_OPENAI_DEPLOYMENT
 
-# SPA Container App — set by Bicep outputs via azd
-$spaFqdn    = $env:SPA_FQDN
-$spaAppName = $env:SPA_APP_NAME
-$rgName     = $env:AZURE_RESOURCE_GROUP
+# SPA Static Web App — set by Bicep outputs via azd
+$swaHostname = $env:SWA_HOSTNAME
 
 # n8n owner account credentials
 $ownerEmail    = 'admin@contoso.com'
@@ -49,7 +47,7 @@ Write-Host "=" * 70 -ForegroundColor Cyan
 Write-Host "  n8n URL      : $n8nUrl"
 Write-Host "  Tenant ID    : $(if ($tenantId) { $tenantId } else { '(not set — Entra setup skipped)' })"
 Write-Host "  OpenAI       : $(if ($openAiResource) { "$openAiResource / deployment=$openAiDeployment" } else { '(not set)' })"
-Write-Host "  SPA FQDN     : $(if ($spaFqdn) { $spaFqdn } else { '(not set)' })"
+Write-Host "  SWA Hostname : $(if ($swaHostname) { $swaHostname } else { '(not set)' })"
 Write-Host ""
 
 if ($tenantId) {
@@ -61,7 +59,7 @@ if ($tenantId) {
     if ($env:ENTRA_AGENT_USER_UPN)    { $resumeParams['AgentUserUpn']     = $env:ENTRA_AGENT_USER_UPN }
     if ($env:ENTRA_BLUEPRINT_SECRET)  { $resumeParams['BlueprintSecret']  = $env:ENTRA_BLUEPRINT_SECRET }
     if ($env:ENTRA_BLUEPRINT_APP_ID)  { $resumeParams['BlueprintAppId']   = $env:ENTRA_BLUEPRINT_APP_ID }
-    if ($spaFqdn)                     { $resumeParams['SpaFqdn']          = $spaFqdn }
+    if ($swaHostname) { $resumeParams['SpaFqdn'] = $swaHostname }
 
     if ($resumeParams.Count -eq 4) {
         Write-Host "  Resuming: Entra objects already exist (IDs loaded from azd env)." -ForegroundColor Green
@@ -104,27 +102,24 @@ if ($tenantId) {
         Write-Host ""
         Write-Host "  Entra object IDs saved to azd env — future `azd provision` runs will reuse them." -ForegroundColor Green
 
-        # Update the SPA Container App env vars with the now-known SPA client ID and Blueprint app ID.
-        # The Container App was provisioned earlier with placeholder values; this brings them up-to-date
-        # so the next `azd deploy spa` bakes the correct values into the container at startup.
-        if ($spaAppName -and $rgName -and $entra.SpaClientId) {
+        # Generate authConfig.js from template with all now-known values so that
+        # the subsequent `azd deploy spa` uploads the correct config to the Static Web App.
+        if ($swaHostname -and $entra.SpaClientId) {
             Write-Host ""
-            Write-Host "  Updating SPA Container App env vars..." -ForegroundColor Cyan
-            $spaEnvVars = [System.Collections.Generic.List[string]]::new()
-            $spaEnvVars.Add("SPA_CLIENT_ID=$($entra.SpaClientId)")
-            if ($entra.BlueprintAppId) { $spaEnvVars.Add("SPA_BLUEPRINT_APP_ID=$($entra.BlueprintAppId)") }
-            try {
-                az containerapp update `
-                    --name           $spaAppName `
-                    --resource-group $rgName `
-                    --set-env-vars   @spaEnvVars `
-                    --output none 2>&1
-                Write-Host "  SPA Container App env vars updated." -ForegroundColor Green
-                Write-Host "  Run `azd deploy spa` to build and push the SPA Docker image." -ForegroundColor Cyan
-            } catch {
-                Write-Host "  Could not update SPA Container App: $($_.Exception.Message)" -ForegroundColor Yellow
-                Write-Host "  Update manually: az containerapp update --name $spaAppName --resource-group $rgName --set-env-vars SPA_CLIENT_ID=$($entra.SpaClientId)" -ForegroundColor Yellow
-            }
+            Write-Host "  Generating SPA authConfig.js from template..." -ForegroundColor Cyan
+            $webhookPath  = 'caef5339-caaa-4228-999d-89abf943bfe2'
+            $redirectUri  = "https://$swaHostname/redirect.html"
+            $templatePath = Join-Path $scriptsDir '..' 'test-spa' 'authConfig.template.js'
+            $outputPath   = Join-Path $scriptsDir '..' 'test-spa' 'authConfig.js'
+            $config = Get-Content $templatePath -Raw
+            $config = $config -replace '__SPA_CLIENT_ID__',        $entra.SpaClientId
+            $config = $config -replace '__SPA_TENANT_ID__',        $tenantId
+            $config = $config -replace '__SPA_REDIRECT_URI__',     $redirectUri
+            $config = $config -replace '__SPA_BLUEPRINT_APP_ID__', $entra.BlueprintAppId
+            $config = $config -replace '__N8N_WEBHOOK_URL__',      "$n8nUrl/webhook/$webhookPath"
+            $config = $config -replace '__N8N_WEBHOOK_TEST_URL__', "$n8nUrl/webhook-test/$webhookPath"
+            $config | Set-Content $outputPath -Encoding UTF8
+            Write-Host "  authConfig.js generated. Run 'azd deploy spa' to publish to Static Web App." -ForegroundColor Green
         }
     }
 
@@ -162,8 +157,8 @@ Write-Host ("=" * 70) -ForegroundColor Green
 Write-Host "  n8n URL  : $n8nUrl" -ForegroundColor White
 Write-Host "  Username : $ownerEmail" -ForegroundColor White
 Write-Host "  Password : $ownerPassword" -ForegroundColor White
-if ($spaFqdn) {
-    Write-Host "  SPA URL  : https://$spaFqdn" -ForegroundColor White
+if ($swaHostname) {
+    Write-Host "  SPA URL  : https://$swaHostname" -ForegroundColor White
 }
 Write-Host ("=" * 70) -ForegroundColor Green
 Write-Host ""

@@ -1,0 +1,9 @@
+{
+  "name": "n8n-aca-spa",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Static Web App packaging metadata for the n8n demo SPA",
+  "scripts": {
+    "build": "echo \"No build step required for static assets\""
+  }
+}

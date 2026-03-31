@@ -8,6 +8,12 @@
     "location": {
       "value": "northeurope"
     },
+    "swaLocation": {
+      "value": "westeurope"
+    },
+    "openAiLocation": {
+      "value": "eastus2"
+    },    
     "n8nImage": {
       "value": "docker.n8n.io/n8nio/n8n:latest"
     },
@@ -21,7 +27,7 @@
       "value": "n8ndata"
     },
     "entraTenantId": {
-      "value": "06a05be1-33df-4feb-9009-95c7a27a7a49"
+      "value": "a3d39e56-c6a9-4881-95eb-142ce4744824"
     },
     "openAiDeploymentName": {
       "value": "gpt-4o"
@@ -35,14 +41,8 @@
     "openAiDeploymentSku": {
       "value": "GlobalStandard"
     },
-    "openAiResourceGroupName": {
-      "value": "rg-n8n-openai-8"
-    },
-    "openAiLocation": {
-      "value": "eastus2"
-    },
     "openAiTpmCapacity": {
-      "value": 200
+      "value": 50
     }
   }
 }
