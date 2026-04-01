@@ -1,24 +1,90 @@
 # n8n on Azure Container Apps + Entra Agent ID
 
-> Fully-automated end-to-end deployment: n8n on Azure Container Apps, Entra Agent ID, and Microsoft Graph MCP Server for Enterprise — configured from a single command.
+> One-command deployment: n8n on Azure Container Apps with Entra Agent ID and Microsoft Graph MCP Server for Enterprise — fully automated from Azure Cloud Shell.
+
+---
+
+## Quick start (Azure Cloud Shell)
+
+Open [Azure Cloud Shell](https://shell.azure.com) (Bash) and run:
+
+```bash
+git clone https://github.com/astaykov/n8n-aca.git && cd n8n-aca && azd up
+```
+
+`azd up` will prompt you for:
+
+| Prompt | What to enter |
+|--------|--------------|
+| **Environment name** | Any name (e.g. `my-n8n`) — used to isolate this deployment |
+| **Azure subscription** | Select the subscription to deploy into |
+| **Azure location** | Select a region (e.g. `northeurope`) |
+| **n8n admin email** | Email for the n8n owner account |
+| **n8n admin password** | Password for the n8n owner account (min 8 chars, mixed case, number) |
+
+After infrastructure deploys, the postprovision hook runs automatically:
+
+1. **Entra sign-in** — a device code is displayed; open the URL and enter the code (Global Admin or App Admin required)
+2. Creates Entra Agent ID objects (Blueprint, Agent Identity, Agent User)
+3. Enables the Microsoft Graph MCP Server for Enterprise
+4. Waits for n8n to become ready
+5. Creates the owner account
+6. Installs the `@astaykov/n8n-nodes-entraagentid` community node
+7. Creates all 5 credentials with real values wired in
+8. Imports 3 workflows with credential IDs already substituted
+9. Activates trigger workflows
+
+When complete, the script prints your n8n URL and a summary.
+
+> **Tenant ID** is auto-detected from your Azure login — no manual configuration needed.
+
+---
+
+## Prerequisites
+
+- An Azure subscription with quota for Azure OpenAI (GPT-4o or similar)
+- **Entra role:** Global Administrator **or** Application Administrator (needed to create app registrations and grant admin consent)
+
+**Azure Cloud Shell** (recommended) comes with everything pre-installed: Azure CLI, Azure Developer CLI (`azd`), PowerShell 7, and Git.
+
+<details>
+<summary>Running locally instead of Cloud Shell</summary>
+
+- [Azure Developer CLI (`azd`)](https://learn.microsoft.com/azure/developer/azure-developer-cli/install-azd) v1.9+
+- [Azure CLI (`az`)](https://learn.microsoft.com/cli/azure/install-azure-cli) v2.60+
+- PowerShell 7.4+
+- [Microsoft.Entra PowerShell module](https://learn.microsoft.com/powershell/entra-powershell/) v1.2+ — installed automatically if missing
+- Git
+
+Log in before running:
+
+```bash
+az login
+azd auth login
+```
+
+Then:
+
+```bash
+git clone https://github.com/astaykov/n8n-aca.git && cd n8n-aca && azd up
+```
+
+</details>
 
 ---
 
 ## What this deploys
-
-`azd provision` provisions all Azure infrastructure **and** fully configures n8n in a single unattended run. There are no manual steps in the n8n UI.
 
 ### Azure infrastructure
 
 | Resource | Purpose |
 |---|---|
 | **Container Apps Environment** | Hosts n8n and the test SPA |
-| **n8n Container App** | Runs `n8n` with HTTPS ingress |
-| **SPA Container App** | Test SPA for the OBO webhook flow |
+| **n8n Container App** | Runs the official `n8nio/n8n` image with HTTPS ingress |
+| **Static Web App** | Test SPA for the OBO webhook flow |
 | **PostgreSQL Flexible Server** | Persistent store for workflows, credentials, executions (Burstable B1ms) |
 | **Storage Account + File Share** | Persistent `/home/node/.n8n` — community nodes and config survive restarts |
 | **Azure OpenAI** | GPT model deployment used by the AI agent workflows |
-| **Container Registry** | Hosts the SPA container image |
 | **Log Analytics Workspace** | Diagnostics |
 
 ### Entra objects (created once, reused on re-runs)
@@ -32,15 +98,15 @@
 
 ### n8n configuration (fully automated)
 
-Everything below is applied automatically by the postprovision hook — no browser interaction needed after Entra sign-in:
+Everything below is applied automatically by the postprovision hook:
 
 ```
 ✓  Owner account created
-✓  Community node installed and reloaded  (@astaykov/n8n-nodes-entraagentid)
+✓  Community node installed  (@astaykov/n8n-nodes-entraagentid)
 ✓  API key generated
 ✓  5 credentials created with real values wired in
 ✓  3 workflows imported with credential IDs already substituted
-✓  Trigger workflow activated
+✓  Trigger workflows activated
 ```
 
 **Credentials created:**
@@ -55,83 +121,19 @@ Everything below is applied automatically by the postprovision hook — no brows
 
 **Workflows imported:**
 
-| Workflow | Active | Description |
-|---|---|---|
-| `Agent ID Auth Manager - Agent User with MCP Enterprise` | ✓ | Acquires a delegated MCP token for the Agent User and forwards it to a sub-workflow |
-| `HTTP Request with autonomous agent token` | ✓ | Demonstrates an autonomous agent calling Microsoft Graph directly with an app-only token |
-| `webhook - assistive agent (on-behalf-of)` | ✓ | Webhook entry point — receives a Bearer token from the SPA, calls the Auth Manager, and responds via the Graph MCP Server on behalf of the signed-in user |
+| Workflow | Description |
+|---|---|
+| `Agent ID Auth Manager - Agent User with MCP Enterprise` | Acquires a delegated MCP token for the Agent User and forwards it to a sub-workflow |
+| `HTTP Request with autonomous agent token` | Demonstrates an autonomous agent calling Microsoft Graph directly with an app-only token |
+| `webhook - assistive agent (on-behalf-of)` | Webhook entry point — receives a Bearer token from the SPA, calls the Auth Manager, and responds via the Graph MCP Server on behalf of the signed-in user |
 
 ---
 
-## Prerequisites
-
-- [Azure Developer CLI (`azd`)](https://learn.microsoft.com/azure/developer/azure-developer-cli/install-azd) v1.9+
-- [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli) v2.60+
-- PowerShell 7.4+ (comes with Windows 11 / available on all platforms)
-- [Microsoft.Entra PowerShell module](https://learn.microsoft.com/powershell/entra-powershell/) v1.2+ — installed automatically if missing
-- An Azure subscription with quota for Azure OpenAI (GPT-4o or similar)
-- **Entra role:** Global Administrator **or** Application Administrator (needed to create app registrations and grant admin consent)
-
----
-
-## Quick start
-
-### 1. Clone and configure
-
-```powershell
-git clone https://github.com/<YOUR_GITHUB_ORG>/n8n-aca.git
-cd n8n-aca
-```
-
-Open `infra/main.parameters.json` and set your Entra tenant ID:
-
-```json
-"entraTenantId": {
-  "value": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-}
-```
-
-Optionally adjust `location`, `openAiLocation`, and `openAiDeploymentName` to match your subscription's available regions and quota.
-
-### 2. Log in to Azure
-
-```powershell
-azd auth login
-```
-
-### 3. Create an azd environment and provision
-
-```powershell
-azd env new my-n8n
-azd env set AZURE_SUBSCRIPTION_ID xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-azd env set AZURE_LOCATION northeurope
-azd env set AZURE_RESOURCE_GROUP rg-my-n8n
-azd provision
-```
-
-`azd env new` creates a local environment file (`.azure/<name>/.env`). The three `azd env set` calls pre-populate it so `azd provision` doesn't interactively prompt you for subscription, location, or resource group.
-
-`azd provision` will:
-
-1. Deploy all Azure resources
-2. Trigger the `postprovision` hook automatically, which:
-   - **Opens a browser** for a one-time Entra sign-in (Global Admin / App Admin required)
-   - Creates or reuses the Blueprint app, Agent Identity SP, and Agent User
-   - Enables the Microsoft Graph MCP Server for Enterprise in your tenant
-   - Waits for n8n to become ready
-   - Creates the owner account and logs in
-   - Installs the `@astaykov/n8n-nodes-entraagentid` community node (n8n restarts)
-   - Creates all 5 credentials with real values
-   - Imports all 3 workflows with credential IDs already substituted
-   - Activates the trigger workflows
-
-When complete, the script prints your n8n URL and a summary.
-
-### 4. (Optional) Deploy the test SPA
+## Deploy the test SPA (optional)
 
 The test SPA is a static JavaScript app that demonstrates the OBO webhook flow from a browser. Deploy it after provisioning:
 
-```powershell
+```bash
 azd deploy spa
 ```
 
@@ -139,7 +141,7 @@ azd deploy spa
 
 ## Re-running / idempotency
 
-`azd provision` is fully idempotent:
+`azd up` is fully idempotent:
 
 - Azure resources that already exist are skipped by Bicep
 - Entra object IDs (Blueprint, Agent Identity, Agent User, Blueprint secret) are saved to the azd environment after the first run and reused on subsequent runs — no re-creation, no extra Entra sign-in prompts
@@ -147,7 +149,7 @@ azd deploy spa
 
 To re-run just the postprovision scripts without touching infrastructure:
 
-```powershell
+```bash
 azd provision   # Bicep detects no changes, runs hooks only
 ```
 
@@ -171,8 +173,7 @@ The postprovision hook calls two scripts that can also be run standalone.
 .\scripts\Configure-N8n.ps1 `
     -N8nUrl          "https://ca-n8n-<token>.northeurope.azurecontainerapps.io" `
     -OwnerEmail      "admin@contoso.com" `
-    -OwnerPassword   "MyStr0ngPassword!" `
-    -SkipNodeInstall                    # omit on first run
+    -OwnerPassword   "MyStr0ngPassword!"
 ```
 
 ### Entra setup only
@@ -256,16 +257,16 @@ To add more scopes, edit the `$MCP_SCOPES` array in [scripts/Setup-EntraAgentId.
 | Resource | Configuration | Est. monthly |
 |---|---|---|
 | n8n Container App | 1 vCore, 2 GiB | ~$15 |
-| SPA Container App | 0.25 vCore, 0.5 GiB | ~$4 |
+| Static Web App | Free tier | $0 |
 | PostgreSQL Flexible Server | Burstable B1ms | ~$12 |
 | Azure OpenAI | Pay-per-token (GPT-4o) | varies |
 | Storage Account | LRS, < 1 GB | ~$1 |
 | Log Analytics | Pay-as-you-go | ~$2 |
-| **Total (ex. OpenAI)** | | **~$34/month** |
+| **Total (ex. OpenAI)** | | **~$30/month** |
 
 ## Cleanup
 
-```powershell
+```bash
 azd down --purge
 ```
 
