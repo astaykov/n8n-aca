@@ -160,6 +160,7 @@ foreach ($mod in $requiredModules) {
 # ─── Phase 2: Connect to Entra ────────────────────────────────────────────────
 Write-Step "[2/6]" "Connecting to Microsoft Entra (tenant: $TenantId)..."
 Write-Note "Device code authentication — watch for the code and URL below."
+Write-Host ""
 
 $connectScopes = @(
     'Organization.Read.All'
@@ -174,7 +175,20 @@ $connectScopes = @(
     'Directory.Read.All'
 )
 
-Connect-Entra -Scopes $connectScopes -TenantId $TenantId -NoWelcome -UseDeviceCode -InformationAction Continue
+# Temporarily ensure all output streams are visible so the device code prompt is shown
+$prevInfoPref    = $InformationPreference
+$prevWarningPref = $WarningPreference
+$InformationPreference = 'Continue'
+$WarningPreference     = 'Continue'
+try {
+    Connect-Entra -Scopes $connectScopes -TenantId $TenantId -NoWelcome -UseDeviceCode *>&1 | ForEach-Object {
+        if ($_ -is [string]) { Write-Host $_ }
+        else { Write-Host $_.ToString() }
+    }
+} finally {
+    $InformationPreference = $prevInfoPref
+    $WarningPreference     = $prevWarningPref
+}
 
 $context = Get-EntraContext
 Write-OK "Connected as: $($context.Account)"
