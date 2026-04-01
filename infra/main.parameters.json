@@ -32,9 +32,6 @@
     "fileShareName": {
       "value": "n8ndata"
     },
-    "entraTenantId": {
-      "value": "a3d39e56-c6a9-4881-95eb-142ce4744824"
-    },
     "openAiDeploymentName": {
       "value": "gpt-4o"
     },

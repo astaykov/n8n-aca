@@ -5,15 +5,11 @@
 
 .DESCRIPTION
     Reads the azd environment variables set by Bicep outputs and calls either:
-      - Run-All.ps1   (if ENTRA_TENANT_ID is set)  → full Entra + n8n setup
-      - Configure-N8n.ps1 (if not set)             → n8n-only setup
+      - Run-All.ps1   (if tenant ID is available) → full Entra + n8n setup
+      - Configure-N8n.ps1 (if not available)      → n8n-only setup
 
-    azd sets these from main.bicep outputs:
-      $env:N8N_URL          – HTTPS URL of the n8n Container App
-      $env:ENTRA_TENANT_ID  – Entra tenant ID (from entraTenantId parameter)
-
-    To trigger Entra Agent ID setup: set entraTenantId in infra/main.parameters.json,
-    then run `azd provision` (or `azd env set ENTRA_TENANT_ID <guid>` manually).
+    Tenant ID is auto-detected from the current Azure login (`az account show`)
+    if not explicitly set via ENTRA_TENANT_ID env var or Bicep parameter.
 #>
 
 Set-StrictMode -Version Latest
@@ -22,6 +18,14 @@ $ErrorActionPreference = 'Stop'
 $scriptsDir = $PSScriptRoot
 $n8nUrl     = $env:N8N_URL
 $tenantId   = $env:ENTRA_TENANT_ID
+
+# Auto-detect tenant ID from the current Azure login if not explicitly set
+if (-not $tenantId) {
+    try {
+        $acct = az account show --query tenantId -o tsv 2>$null
+        if ($acct) { $tenantId = $acct.Trim() }
+    } catch { <# best-effort #> }
+}
 
 # Azure OpenAI — set by Bicep outputs via azd
 $openAiResource   = $env:AZURE_OPENAI_RESOURCE
@@ -130,11 +134,11 @@ if ($tenantId) {
     }
 
 } else {
-    Write-Host "ENTRA_TENANT_ID is not set." -ForegroundColor Yellow
+    Write-Host "Tenant ID not detected (not logged into Azure or ENTRA_TENANT_ID not set)." -ForegroundColor Yellow
     Write-Host "Skipping Entra Agent ID setup. Only basic n8n configuration will run." -ForegroundColor Yellow
     Write-Host ""
     Write-Host "To enable full Entra setup:" -ForegroundColor Cyan
-    Write-Host "  1. Set entraTenantId in infra/main.parameters.json"
+    Write-Host "  1. Log in with: az login"
     Write-Host "  2. Run: azd provision"
     Write-Host "  OR run manually:"
     Write-Host "  3. cd scripts && .\Run-All.ps1 -TenantId <guid> -N8nUrl $n8nUrl"
