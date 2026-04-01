@@ -174,7 +174,7 @@ $connectScopes = @(
     'Directory.Read.All'
 )
 
-Connect-Entra -Scopes $connectScopes -TenantId $TenantId -NoWelcome
+Connect-Entra -Scopes $connectScopes -TenantId $TenantId -NoWelcome -UseDeviceCode
 
 $context = Get-EntraContext
 Write-OK "Connected as: $($context.Account)"
