@@ -159,7 +159,7 @@ foreach ($mod in $requiredModules) {
 
 # ─── Phase 2: Connect to Entra ────────────────────────────────────────────────
 Write-Step "[2/6]" "Connecting to Microsoft Entra (tenant: $TenantId)..."
-Write-Note "A browser window will open. Sign in with Global Administrator or Application Administrator."
+Write-Note "Device code authentication — watch for the code and URL below."
 
 $connectScopes = @(
     'Organization.Read.All'
@@ -174,7 +174,7 @@ $connectScopes = @(
     'Directory.Read.All'
 )
 
-Connect-Entra -Scopes $connectScopes -TenantId $TenantId -NoWelcome -UseDeviceCode
+Connect-Entra -Scopes $connectScopes -TenantId $TenantId -NoWelcome -UseDeviceCode -InformationAction Continue
 
 $context = Get-EntraContext
 Write-OK "Connected as: $($context.Account)"
