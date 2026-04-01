@@ -23,6 +23,13 @@ param postgresUsername string
 @description('PostgreSQL admin password')
 param postgresPassword string
 
+@description('n8n Admin email')
+param n8nAdminEmail string
+
+@secure()
+@description('n8n Admin password')
+param n8nAdminPassword string
+
 @description('n8n container image')
 param n8nImage string = 'docker.n8n.io/n8nio/n8n:latest'
 
@@ -31,6 +38,9 @@ param cpuCores string = '1'
 
 @description('Memory allocated to the container (e.g. 1Gi, 2Gi)')
 param memorySize string = '2Gi'
+
+@description('Allowed CORS origin for the n8n webhook API. Set to the SPA URL so browser requests are accepted.')
+param corsOrigin string
 
 @description('Tags to apply to all resources')
 param tags object = {}
@@ -65,7 +75,7 @@ resource n8nApp 'Microsoft.App/containerApps@2025-01-01' = {
         }
       ]
       containers: [
-        {
+        {  
           name: 'n8n'
           image: n8nImage
           resources: {
@@ -133,6 +143,21 @@ resource n8nApp 'Microsoft.App/containerApps@2025-01-01' = {
             {
               name: 'DB_POSTGRESDB_SSL_REJECT_UNAUTHORIZED'
               value: 'false'
+            }
+            // Enable the public REST API (required for workflow import and API key creation)
+            {
+              name: 'N8N_PUBLIC_API_DISABLED'
+              value: 'false'
+            }
+            // Allow community nodes (e.g. @astaykov/n8n-nodes-EntraAgentID) to be used as AI tools
+            {
+              name: 'N8N_COMMUNITY_PACKAGES_ALLOW_TOOL_USAGE'
+              value: 'true'
+            }
+            // Allow cross-origin requests from the SPA (Static Web App on a different domain)
+            {
+              name: 'N8N_CORS_ORIGIN'
+              value: corsOrigin
             }
           ]
           volumeMounts: [

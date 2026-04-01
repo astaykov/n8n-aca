@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Entra Agent Assistant</title>
+  <script src="https://cdn.jsdelivr.net/npm/marked@9/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
+  <script src="https://alcdn.msauth.net/browser/2.31.0/js/msal-browser.js"
+    integrity="sha384-BO4qQ2RTxj2akCJc7t6IdU9aRg6do4LGIkVVa01Hm33jxM+v2G+4q+vZjmOCywYq"
+    crossorigin="anonymous"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
+  <style>
+    :root{--bg-main:#0d1117;--bg-panel:#161b22;--bg-input:#21262d;--bg-user:#1f6feb;--bg-agent:#21262d;--border:#30363d;--text-main:#e6edf3;--text-muted:#8b949e;--accent:#388bfd;--sidebar-w:260px}
+    *,*::before,*::after{box-sizing:border-box}
+    html,body{height:100%;margin:0;overflow:hidden;background:var(--bg-main);color:var(--text-main);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+    /* ── Sidebar ── */
+    #sidebar{position:fixed;top:0;left:0;bottom:0;width:var(--sidebar-w);background:var(--bg-panel);border-right:1px solid var(--border);display:flex;flex-direction:column;z-index:200;overflow:hidden}
+    #sidebar-top{padding:12px;flex-shrink:0}
+    #new-chat-btn{width:100%;display:flex;align-items:center;gap:8px;padding:9px 12px;background:transparent;border:1px solid var(--border);border-radius:8px;color:var(--text-main);font-size:.85rem;cursor:pointer;font-family:inherit}
+    #new-chat-btn:hover{background:var(--bg-input);border-color:var(--accent)}
+    #thread-list{flex:1;overflow-y:auto;padding:4px 8px 12px}
+    .thread-item{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:6px;cursor:pointer;font-size:.82rem;color:var(--text-muted);margin-bottom:1px;overflow:hidden}
+    .thread-item:hover{background:var(--bg-input);color:var(--text-main)}
+    .thread-item.active{background:var(--bg-input);color:var(--text-main)}
+    .thread-item i{flex-shrink:0;font-size:.8rem}
+    .thread-title{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+    /* ── Header ── */
+    #header{position:fixed;top:0;left:var(--sidebar-w);right:0;z-index:100;background:var(--bg-panel);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:10px 20px;gap:12px}
+    .brand{font-weight:600;font-size:1rem;display:flex;align-items:center;gap:8px}
+    .brand i{color:var(--accent)}
+    .spacer{flex:1}
+    #user-chip{font-size:.8rem;color:var(--text-muted);display:none;align-items:center;gap:6px}
+    #auth-btn{font-size:.8rem;padding:4px 14px;border-radius:6px;cursor:pointer;background:var(--bg-input);color:var(--text-main);border:1px solid var(--border)}
+    #auth-btn:hover{border-color:var(--accent)}
+    /* ── Chat area ── */
+    #chat-wrap{position:fixed;top:53px;bottom:76px;left:var(--sidebar-w);right:0;overflow-y:auto;overflow-x:hidden;padding:20px 16px}
+    #messages{max-width:780px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+    #signin-placeholder{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;height:100%;text-align:center;color:var(--text-muted)}
+    #signin-placeholder i{font-size:3rem;color:var(--border)}
+    #signin-placeholder h5{margin:0;font-weight:500}
+    #signin-placeholder p{margin:0;font-size:.875rem;max-width:340px}
+    /* ── Messages ── */
+    .msg{display:flex;flex-direction:column;gap:4px;max-width:72%}
+    .msg.user{align-self:flex-end;align-items:flex-end}
+    .msg.agent,.msg.error{align-self:flex-start;align-items:flex-start}
+    .label{font-size:.72rem;color:var(--text-muted);display:flex;align-items:center;gap:5px}
+    .bubble{padding:10px 14px;border-radius:12px;line-height:1.5;font-size:.9rem;word-break:break-word;overflow-x:hidden}
+    .msg.user .bubble{white-space:pre-wrap;background:var(--bg-user);color:#fff;border-bottom-right-radius:3px}
+    .msg.agent .bubble{background:var(--bg-agent);border:1px solid var(--border);border-bottom-left-radius:3px}
+    .msg.error .bubble{background:#3a1010;border:1px solid #8b2020;color:#f85149}
+    .msg.agent.thinking .bubble{color:var(--text-muted);font-style:italic}
+    .msg.agent .bubble p{margin:.3em 0}.msg.agent .bubble p:last-child{margin-bottom:0}
+    .msg.agent .bubble ul,.msg.agent .bubble ol{margin:.3em 0;padding-left:1.5em}
+    .msg.agent .bubble li{margin:.2em 0}
+    .msg.agent .bubble strong{font-weight:600;color:#e6edf3}
+    .msg.agent .bubble code{background:#0d1117;border:1px solid #30363d;border-radius:3px;padding:1px 5px;font-size:.82em;font-family:ui-monospace,"SF Mono",monospace}
+    .msg.agent .bubble pre{background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:10px 14px;overflow-x:auto;margin:.5em 0;max-width:100%}
+    .msg.agent .bubble pre code{background:none;border:none;padding:0;font-size:.85em}
+    .msg.agent .bubble h1,.msg.agent .bubble h2,.msg.agent .bubble h3,.msg.agent .bubble h4{margin:.5em 0 .2em;font-weight:600;line-height:1.3}
+    .msg.agent .bubble h1{font-size:1.1em}.msg.agent .bubble h2{font-size:1.05em}.msg.agent .bubble h3,.msg.agent .bubble h4{font-size:1em}
+    .ts{font-size:.68rem;color:var(--text-muted)}
+    /* ── Input bar ── */
+    #input-bar{position:fixed;bottom:0;left:var(--sidebar-w);right:0;background:var(--bg-panel);border-top:1px solid var(--border);padding:12px 16px 16px}
+    #input-inner{max-width:780px;margin:0 auto;display:flex;gap:8px;align-items:flex-end}
+    #msg-input{flex:1;background:var(--bg-input);border:1px solid var(--border);border-radius:10px;color:var(--text-main);padding:10px 14px;font-size:.9rem;resize:none;font-family:inherit;line-height:1.4;max-height:160px;overflow-y:auto}
+    #msg-input:focus{outline:none;border-color:var(--accent)}
+    #msg-input::placeholder{color:var(--text-muted)}
+    #msg-input:disabled{opacity:.4;cursor:not-allowed}
+    #send-btn{width:40px;height:40px;border-radius:8px;border:none;cursor:pointer;background:var(--accent);color:#fff;font-size:1rem;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+    #send-btn:disabled{opacity:.35;cursor:not-allowed}
+  </style>
+</head>
+<body>
+<div id="sidebar">
+  <div id="sidebar-top">
+    <button id="new-chat-btn" onclick="newConversation()"><i class="bi bi-plus-lg"></i> New chat</button>
+  </div>
+  <div id="thread-list"></div>
+</div>
+<div id="header">
+  <div class="brand"><i class="bi bi-robot"></i> Entra Agent Assistant</div>
+  <div class="spacer"></div>
+  <div id="user-chip"><i class="bi bi-person-circle"></i><span id="user-name"></span></div>
+  <button id="auth-btn" onclick="signIn()">Sign in</button>
+</div>
+<div id="chat-wrap">
+  <div id="messages">
+    <div id="signin-placeholder">
+      <i class="bi bi-shield-lock"></i>
+      <h5>Sign in to start chatting</h5>
+      <p>Authenticate with your Entra account to send messages to the AI agent.</p>
+    </div>
+  </div>
+</div>
+<div id="input-bar">
+  <div id="input-inner">
+    <textarea id="msg-input" rows="1" placeholder="Type a message… (Enter to send, Shift+Enter for newline)"
+      disabled onkeydown="handleKey(event)" oninput="autoGrow(this)"></textarea>
+    <button id="send-btn" onclick="sendMessage()" disabled title="Send"><i class="bi bi-send-fill"></i></button>
+  </div>
+</div>
+<script type="text/javascript" src="./authConfig.js"></script>
+<script type="text/javascript" src="./authPopup.js"></script>
+<script type="text/javascript" src="./app.js"></script>
+</body>
+</html>
