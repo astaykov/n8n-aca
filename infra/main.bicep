@@ -20,11 +20,11 @@ param fileShareName string = 'n8ndata'
 param postgresAdminPassword string = newGuid()
 
 @description('n8n Admin email')
-param n8nAdminEmail string = 'n8n@contoso.com' // TODO: replace with actual e-mail
+param n8nAdminEmail string
 
-@description('n8n Admin password')
+@description('n8n Admin password (min 8 chars, mixed case, number)')
 @secure()
-param n8nAdminPassword string = 'SuperStr0ngP@ssw0rd!' // TODO: replace with generated password and output to Key Vault or postprovision script
+param n8nAdminPassword string
 
 
 @description('n8n container image to deploy.')
