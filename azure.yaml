@@ -17,13 +17,12 @@ services:
     dist: .
     language: js
     host: staticwebapp
+    resourceId: ${SWA_RESOURCE_ID}
 
 workflows:
   up:
     steps:
       - azd: provision
-      - azd: package --all
-      - azd: deploy --all
 
 hooks:
   postprovision:

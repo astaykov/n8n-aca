@@ -19,6 +19,14 @@ param fileShareName string = 'n8ndata'
 @secure()
 param postgresAdminPassword string = newGuid()
 
+@description('n8n Admin email')
+param n8nAdminEmail string = 'n8n@contoso.com' // TODO: replace with actual e-mail
+
+@description('n8n Admin password')
+@secure()
+param n8nAdminPassword string = 'SuperStr0ngP@ssw0rd!' // TODO: replace with generated password and output to Key Vault or postprovision script
+
+
 @description('n8n container image to deploy.')
 param n8nImage string = 'docker.n8n.io/n8nio/n8n:latest'
 
@@ -124,6 +132,8 @@ module n8nApp 'modules/n8n-app.bicep' = {
     postgresDatabaseName: postgres.outputs.databaseName
     postgresUsername: postgres.outputs.adminUsername
     postgresPassword: postgresAdminPassword
+    n8nAdminEmail: n8nAdminEmail
+    n8nAdminPassword: n8nAdminPassword
     n8nImage: n8nImage
     cpuCores: cpuCores
     memorySize: memorySize
@@ -132,8 +142,21 @@ module n8nApp 'modules/n8n-app.bicep' = {
   }
 }
 
+// ── Azure OpenAI key (separate module to avoid listKeys() race condition) ────
+// dependsOn ensures the entire openai module (account + model deployment) is fully
+// terminal before listKeys() is evaluated. Without this, ARM returns RequestConflict 409.
+module openAiKey 'modules/openai-key.bicep' = {
+  name: 'openai-key'
+  dependsOn: [openAi]
+  params: {
+    openAiName: openAi.outputs.resourceName
+  }
+}
+
 // ── Outputs ────────────────────────────────────────────────────────────────
 output N8N_URL string = n8nApp.outputs.appUrl
+output N8N_ADMIN_EMAIL string = n8nAdminEmail
+output N8N_ADMIN_PASSWORD string = n8nAdminPassword
 output CONTAINER_APP_NAME string = n8nApp.outputs.appName
 output POSTGRES_SERVER string = postgres.outputs.serverName
 output POSTGRES_DATABASE string = postgres.outputs.databaseName
@@ -142,9 +165,10 @@ output ENTRA_TENANT_ID string = entraTenantId
 
 // Azure OpenAI — used by postprovision.ps1 to create the azureOpenAiApi credential in n8n
 output AZURE_OPENAI_RESOURCE string = openAi.outputs.resourceName
-output AZURE_OPENAI_API_KEY string = openAi.outputs.apiKey
+output AZURE_OPENAI_API_KEY string = openAiKey.outputs.apiKey
 output AZURE_OPENAI_DEPLOYMENT string = openAi.outputs.deploymentName
 
 // SWA — used by postprovision.ps1 to generate authConfig.js and configure Entra redirect URIs
 output SWA_HOSTNAME string = swa.outputs.defaultHostname
 output SWA_URL string = swa.outputs.appUrl
+output SWA_RESOURCE_ID string = swa.outputs.resourceId

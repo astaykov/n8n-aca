@@ -23,6 +23,13 @@ param postgresUsername string
 @description('PostgreSQL admin password')
 param postgresPassword string
 
+@description('n8n Admin email')
+param n8nAdminEmail string
+
+@secure()
+@description('n8n Admin password')
+param n8nAdminPassword string
+
 @description('n8n container image')
 param n8nImage string = 'docker.n8n.io/n8nio/n8n:latest'
 
@@ -75,13 +82,6 @@ resource n8nApp 'Microsoft.App/containerApps@2025-01-01' = {
             cpu: json(cpuCores)
             memory: memorySize
           }
-          // On startup: install community node into the Azure Files mount, then launch n8n.
-          // The node_modules directory persists on Azure Files so reinstalls are skipped on restart.
-          command: [
-            '/bin/sh'
-            '-c'
-            'mkdir -p /home/node/.n8n/nodes && cd /home/node/.n8n/nodes && (test -d node_modules/@astaykov/n8n-nodes-entraagentid || npm install @astaykov/n8n-nodes-entraagentid --no-save 2>&1 | head -20) || true; exec n8n'
-          ]
           env: [
             {
               name: 'N8N_PORT'

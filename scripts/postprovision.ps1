@@ -27,16 +27,22 @@ $tenantId   = $env:ENTRA_TENANT_ID
 $openAiResource   = $env:AZURE_OPENAI_RESOURCE
 $openAiApiKey     = $env:AZURE_OPENAI_API_KEY
 $openAiDeployment = $env:AZURE_OPENAI_DEPLOYMENT
+$shouldDeploySpa  = $false
 
 # SPA Static Web App — set by Bicep outputs via azd
 $swaHostname = $env:SWA_HOSTNAME
 
 # n8n owner account credentials
-$ownerEmail    = 'admin@contoso.com'
-$ownerPassword = 'N8nAdm1n!Test'
+$ownerEmail    = $env:N8N_ADMIN_EMAIL
+$ownerPassword = $env:N8N_ADMIN_PASSWORD
 
 if (-not $n8nUrl) {
     Write-Error "N8N_URL environment variable is not set. Ensure azd provision completed successfully."
+    exit 1
+}
+
+if (-not $ownerEmail -or -not $ownerPassword) {
+    Write-Error "N8N_ADMIN_EMAIL and/or N8N_ADMIN_PASSWORD are not set. Configure n8nAdminEmail/n8nAdminPassword in infra/main.bicep or infra/main.parameters.json."
     exit 1
 }
 
@@ -45,6 +51,7 @@ Write-Host "=" * 70 -ForegroundColor Cyan
 Write-Host "  azd postprovision: n8n + Entra Agent ID setup" -ForegroundColor Cyan
 Write-Host "=" * 70 -ForegroundColor Cyan
 Write-Host "  n8n URL      : $n8nUrl"
+Write-Host "  n8n Admin    : $ownerEmail"
 Write-Host "  Tenant ID    : $(if ($tenantId) { $tenantId } else { '(not set — Entra setup skipped)' })"
 Write-Host "  OpenAI       : $(if ($openAiResource) { "$openAiResource / deployment=$openAiDeployment" } else { '(not set)' })"
 Write-Host "  SWA Hostname : $(if ($swaHostname) { $swaHostname } else { '(not set)' })"
@@ -78,7 +85,6 @@ if ($tenantId) {
         -N8nUrl          $n8nUrl `
         -OwnerEmail      $ownerEmail `
         -OwnerPassword   $ownerPassword `
-        -SkipNodeInstall `
         @resumeParams `
         @openAiParams
 
@@ -102,8 +108,7 @@ if ($tenantId) {
         Write-Host ""
         Write-Host "  Entra object IDs saved to azd env — future `azd provision` runs will reuse them." -ForegroundColor Green
 
-        # Generate authConfig.js from template with all now-known values so that
-        # the subsequent `azd deploy spa` uploads the correct config to the Static Web App.
+        # Generate authConfig.js from template so SPA deploy can run non-interactively.
         if ($swaHostname -and $entra.SpaClientId) {
             Write-Host ""
             Write-Host "  Generating SPA authConfig.js from template..." -ForegroundColor Cyan
@@ -119,7 +124,8 @@ if ($tenantId) {
             $config = $config -replace '__N8N_WEBHOOK_URL__',      "$n8nUrl/webhook/$webhookPath"
             $config = $config -replace '__N8N_WEBHOOK_TEST_URL__', "$n8nUrl/webhook-test/$webhookPath"
             $config | Set-Content $outputPath -Encoding UTF8
-            Write-Host "  authConfig.js generated. Run 'azd deploy spa' to publish to Static Web App." -ForegroundColor Green
+            $shouldDeploySpa = $true
+            Write-Host "  authConfig.js generated." -ForegroundColor Green
         }
     }
 
@@ -131,7 +137,7 @@ if ($tenantId) {
     Write-Host "  1. Set entraTenantId in infra/main.parameters.json"
     Write-Host "  2. Run: azd provision"
     Write-Host "  OR run manually:"
-    Write-Host "  3. cd scripts && .\Run-All.ps1 -TenantId <guid> -N8nUrl $n8nUrl -SkipNodeInstall"
+    Write-Host "  3. cd scripts && .\Run-All.ps1 -TenantId <guid> -N8nUrl $n8nUrl"
     Write-Host ""
 
     # n8n-only: configure owner, import workflows, still create Azure OpenAI credential if available
@@ -139,7 +145,6 @@ if ($tenantId) {
         N8nUrl               = $n8nUrl
         OwnerEmail           = $ownerEmail
         OwnerPassword        = $ownerPassword
-        SkipNodeInstall      = $true
         SkipCredentialCreate = $true
     }
     if ($openAiResource)   { $noEntraParams['AzureOpenAiResourceName'] = $openAiResource }
@@ -147,6 +152,20 @@ if ($tenantId) {
     if ($openAiDeployment) { $noEntraParams['AzureOpenAiDeployment']   = $openAiDeployment }
 
     & "$scriptsDir\Configure-N8n.ps1" @noEntraParams
+}
+
+# Deploy SPA with retry as part of the provisioning flow so `azd up` stays one-command.
+if ($shouldDeploySpa) {
+    Write-Host ""
+    Write-Host "  Deploying SPA with retry..." -ForegroundColor Cyan
+    & "$scriptsDir\Deploy-Spa-WithRetry.ps1" -MaxAttempts 5
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "SPA deployment failed after retries."
+        exit $LASTEXITCODE
+    }
+} elseif ($swaHostname) {
+    Write-Host ""
+    Write-Host "  Skipping SPA deploy: missing Entra SPA values required to render authConfig.js." -ForegroundColor Yellow
 }
 
 # ── Final summary ─────────────────────────────────────────────────────────────

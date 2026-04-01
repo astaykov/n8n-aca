@@ -22,3 +22,4 @@ resource swa 'Microsoft.Web/staticSites@2023-12-01' = {
 output defaultHostname string = swa.properties.defaultHostname
 output appName string = swa.name
 output appUrl string = 'https://${swa.properties.defaultHostname}'
+output resourceId string = swa.id

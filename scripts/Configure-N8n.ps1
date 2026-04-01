@@ -9,10 +9,8 @@
     is required:
 
       1. Waits for n8n to become healthy (retries for up to 10 min)
-      2. Checks whether the owner account has already been created
-      3. Creates the n8n owner account via the setup API
-      4. Logs in and retrieves an API key
-      5. Imports every *.json file found in the workflows/ folder
+      2. Logs in and retrieves an API key
+      3. Imports every *.json file found in the workflows/ folder
 
     Designed to run immediately after 'azd up' completes.
 
@@ -26,12 +24,6 @@
 .PARAMETER OwnerPassword
     Password for the n8n owner account. Must meet n8n requirements:
     minimum 8 characters, mixed case, number.
-
-.PARAMETER OwnerFirstName
-    First name for the n8n owner account (default: n8n).
-
-.PARAMETER OwnerLastName
-    Last name for the n8n owner account (default: Admin).
 
 .PARAMETER WorkflowsPath
     Path to the folder containing workflow JSON files to import.
@@ -69,19 +61,10 @@ param(
     [string]$OwnerPassword,
 
     [Parameter(Mandatory = $false)]
-    [string]$OwnerFirstName = 'n8n',
-
-    [Parameter(Mandatory = $false)]
-    [string]$OwnerLastName = 'Admin',
-
-    [Parameter(Mandatory = $false)]
     [string]$WorkflowsPath = (Join-Path $PSScriptRoot '..\workflows'),
 
     [Parameter(Mandatory = $false)]
     [switch]$SkipWorkflowImport,
-
-    [Parameter(Mandatory = $false)]
-    [string]$CommunityNodePackage = '@astaykov/n8n-nodes-entraagentid',
 
     [Parameter(Mandatory = $false)]
     [switch]$SkipNodeInstall,
@@ -142,10 +125,18 @@ function Invoke-N8n {
         [string]$Path,
         [object]$Body,
         [hashtable]$Headers = @{},
-        [switch]$UseSession
+        [switch]$UseSession,
+        [string]$ApiKey,
+        [int]$MaxAttempts = 1,
+        [int]$InitialRetryDelaySeconds = 3,
+        [switch]$RetryOnTransient
     )
     $uri  = "$N8nUrl$Path"
     $baseHeaders = @{ 'Content-Type' = 'application/json' } + $Headers
+
+    if ($ApiKey) {
+        $baseHeaders['X-N8N-API-KEY'] = $ApiKey
+    }
 
     $params = @{
         Uri     = $uri
@@ -161,21 +152,64 @@ function Invoke-N8n {
         $params['Body'] = ($Body | ConvertTo-Json -Depth 20 -Compress)
     }
 
-    try {
-        $response = Invoke-RestMethod @params
-        return $response
-    } catch {
-        $statusCode = $_.Exception.Response.StatusCode.value__
-        $detail     = $_.ErrorDetails.Message
-        throw "n8n API error [$Method $Path] HTTP $statusCode : $detail"
+    $attempt = 1
+    $delay = $InitialRetryDelaySeconds
+
+    while ($attempt -le $MaxAttempts) {
+        try {
+            return (Invoke-RestMethod @params)
+        } catch {
+            $responseProp = $_.Exception.PSObject.Properties['Response']
+            $statusCode = if ($responseProp -and $responseProp.Value) { $responseProp.Value.StatusCode.value__ } else { 0 }
+            $detail = if ($_.ErrorDetails -and $_.ErrorDetails.Message) { $_.ErrorDetails.Message } else { $_.Exception.Message }
+
+            $isTransient = $statusCode -in @(0, 404, 408, 409, 425, 429, 500, 502, 503, 504)
+            if ($RetryOnTransient -and $isTransient -and $attempt -lt $MaxAttempts) {
+                Write-Note "Transient n8n API response [$Method $Path] HTTP $statusCode. Retry $attempt/$MaxAttempts in ${delay}s."
+                Start-Sleep -Seconds $delay
+                $delay = [Math]::Min($delay * 2, 30)
+                $attempt++
+                continue
+            }
+
+            throw "n8n API error [$Method $Path] HTTP $statusCode : $detail"
+        }
     }
+}
+
+function Invoke-N8nLogin {
+    param(
+        [string]$Email,
+        [string]$Password
+    )
+
+    $loginBodies = @(
+        @{ emailOrLdapLoginId = $Email; password = $Password },
+        @{ email = $Email; password = $Password }
+    )
+
+    foreach ($loginBody in $loginBodies) {
+        try {
+            Invoke-N8n -Method POST -Path '/rest/login' -Body $loginBody -UseSession -RetryOnTransient -MaxAttempts 12 -InitialRetryDelaySeconds 5 | Out-Null
+            return
+        } catch {
+            $msg = $_.Exception.Message
+            # If this payload shape isn't accepted, try the fallback payload shape.
+            if ($msg -match 'HTTP 400' -or $msg -match 'HTTP 422') {
+                continue
+            }
+            throw
+        }
+    }
+
+    throw "Unable to authenticate to n8n using supported login payloads."
 }
 
 # ─── Phase 1 + 2: Wait for n8n to be fully ready, then read setup state ──────
 # We poll /rest/settings rather than /healthz because /healthz fires as soon as
 # the HTTP server starts — before DB migrations finish and REST routes register.
 # /rest/settings only succeeds when n8n is truly ready to accept API calls.
-Write-Step "[1/4]" "Waiting for n8n at $N8nUrl to become ready (polling /rest/settings)..."
+Write-Step "[1/1]" "Waiting for n8n at $N8nUrl to become ready (polling /rest/settings)..."
 
 $maxWaitSec  = 600   # 10 minutes total
 $intervalSec = 10
@@ -210,174 +244,45 @@ if (-not $settingsReady) {
 }
 Write-OK "n8n is ready"
 
-# ─── Phase 2: Determine setup state from the settings response ────────────────
-Write-Step "[2/4]" "Checking n8n owner setup status..."
+Write-Step "[1/3]" "Creating n8n owner account ($OwnerEmail)..."
 
-$needsSetup = $false
-if ($settings) {
-    $dataProp = $settings.PSObject.Properties['data']
-    $settingsData = if ($dataProp) { $dataProp.Value } else { $settings }
-    $umProp = $settingsData.PSObject.Properties['userManagement']
-    if ($umProp) {
-        $showProp = $umProp.Value.PSObject.Properties['showSetupOnFirstLoad']
-        $needsSetup = $showProp -and $showProp.Value -eq $true
-    }
+$setupBody = @{
+    email     = $OwnerEmail
+    firstName = 'n8n'
+    lastName  = 'Admin'
+    password  = $OwnerPassword
+
 }
-
-# n8n login body — field name changed to emailOrLdapLoginId in recent versions
-$loginBody = @{ emailOrLdapLoginId = $OwnerEmail; password = $OwnerPassword }
-
-if (-not $needsSetup) {
-    Write-Note "Owner account already set up — skipping account creation."
-    Write-Note "Attempting login with provided credentials..."
-
-    try {
-        $loginResp = Invoke-N8n -Method POST -Path '/rest/login' -Body $loginBody -UseSession
-        Write-OK "Logged in as $OwnerEmail"
-    } catch {
-        Write-Err "Login failed. If you forgot the password, reset it via the n8n UI."
-        throw $_
-    }
-} else {
-    # ─── Phase 2a: Create owner account ──────────────────────────────────────
-    Write-Step "[2/4]" "Creating n8n owner account ($OwnerEmail)..."
-
-    $setupBody = @{
-        email     = $OwnerEmail
-        firstName = $OwnerFirstName
-        lastName  = $OwnerLastName
-        password  = $OwnerPassword
-    }
-
-    $setupResp = Invoke-N8n -Method POST -Path '/rest/owner/setup' -Body $setupBody -UseSession
+try {
+    $setupResp = Invoke-N8n -Method POST -Path '/rest/owner/setup' -Body $setupBody -UseSession -RetryOnTransient -MaxAttempts 6 -InitialRetryDelaySeconds 5
     Write-OK "Owner account created: $OwnerEmail"
 
-    # Log in to establish a session cookie
-    Invoke-N8n -Method POST -Path '/rest/login' -Body $loginBody -UseSession | Out-Null
-    Write-OK "Logged in"
-}
-
-# ─── Phase 3: Install community node ─────────────────────────────────────────
-# Even when -SkipNodeInstall is set, verify the node is actually present.
-# If it's missing (fresh deploy), install it anyway.
-$_nodeAlreadyPresent = $false
-if ($SkipNodeInstall) {
-    try {
-        $pkgCheck = Invoke-N8n -Method GET -Path '/rest/community-packages' -UseSession -ErrorAction Stop
-        $_nodeAlreadyPresent = ($pkgCheck.data | Where-Object {
-            $_.packageName -like '*entraagentid*' -or $_.name -like '*entraagentid*'
-        }) -as [bool]
-    } catch { $_nodeAlreadyPresent = $false }
-}
-
-if ($SkipNodeInstall -and $_nodeAlreadyPresent) {
-    Write-Step "[3/5]" "Skipping community node install — node already present (-SkipNodeInstall set)."
-} else {
-    if ($SkipNodeInstall -and -not $_nodeAlreadyPresent) {
-        Write-Step "[3/5]" "Node not installed despite -SkipNodeInstall — installing now..."
-    }
-    Write-Step "[3/5]" "Installing community node: $CommunityNodePackage"
-
-    $nodeInstalled = $false
-    try {
-        $pkgList = Invoke-N8n -Method GET -Path '/rest/community-packages' -UseSession
-        $alreadyThere = $pkgList.data | Where-Object {
-            $_.packageName -like '*entraagentid*' -or $_.name -like '*entraagentid*'
-        }
-        if ($alreadyThere) {
-            # DB entry exists — force a PATCH update so npm reinstalls and n8n reloads the node types.
-            # Without this, the node can appear "installed" in the DB but remain unrecognised in workflows.
-            Write-Note "Package registered (v$($alreadyThere.installedVersion)) — forcing reload via update..."
-            try {
-                Invoke-N8n -Method PATCH -Path '/rest/community-packages' `
-                    -Body @{ name = $CommunityNodePackage } `
-                    -UseSession | Out-Null
-                Write-OK "Package updated/reloaded — waiting for n8n to restart..."
-            } catch {
-                Write-Note "PATCH update skipped (already latest): $($_.ErrorDetails.Message)"
-                $nodeInstalled = $true   # up-to-date, no restart needed
-            }
-        }
-    } catch {
-        Write-Note "Could not list community packages — will attempt fresh install."
-    }
-
-    if (-not $nodeInstalled) {
-        try {
-            Write-Note "Installing $CommunityNodePackage — n8n will restart..."
-            try {
-                Invoke-N8n -Method POST -Path '/rest/community-packages' `
-                    -Body @{ name = $CommunityNodePackage } `
-                    -UseSession | Out-Null
-            } catch {
-                if ($_.ErrorDetails.Message -like '*already installed*') {
-                    # Registered but not loaded — PATCH forces npm reinstall + restart
-                    Write-Note "Package registered but not loaded — forcing reinstall via PATCH..."
-                    Invoke-N8n -Method PATCH -Path '/rest/community-packages' `
-                        -Body @{ name = $CommunityNodePackage } `
-                        -UseSession | Out-Null
-                } else {
-                    throw
-                }
-            }
-
-            # n8n restarts after any community package install/update — wait for it
-            Write-Note "Waiting for n8n to restart (up to 5 min)..."
-            Start-Sleep -Seconds 20
-            $maxWaitSec2 = 300
-            $elapsed2    = 0
-            while ($elapsed2 -lt $maxWaitSec2) {
-                try {
-                    $h = Invoke-RestMethod -Uri "$N8nUrl/healthz" -Method GET -TimeoutSec 10
-                    if ($h.status -eq 'ok') { break }
-                } catch {}
-                Start-Sleep -Seconds 10
-                $elapsed2 += 10
-            }
-            if ($elapsed2 -ge $maxWaitSec2) {
-                throw "n8n did not come back online within ${maxWaitSec2}s after node install."
-            }
-            Write-OK "n8n back online — re-logging in after restart..."
-
-            # Session cookie is invalidated on restart — create a new session
-            $session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
-            Invoke-N8n -Method POST -Path '/rest/login' -Body $loginBody -UseSession | Out-Null
-            Write-OK "Re-logged in"
-            $nodeInstalled = $true
-        } catch {
-            Write-Err "Community node install failed: $($_.Exception.Message)"
-            Write-Note "Install manually: n8n UI → Settings → Community Nodes → $CommunityNodePackage"
-        }
+} catch {
+    if ($_.Exception.Message -match 'HTTP 400' -or $_.Exception.Message -match 'HTTP 409') {
+        Write-Note "Owner account already exists; continuing with login."
+    } else {
+        throw
     }
 }
+
+Invoke-N8nLogin -Email $OwnerEmail -Password $OwnerPassword
+Write-OK "Logged in as $OwnerEmail"
+
 
 # ─── Phase 4: Create API key ──────────────────────────────────────────────────
-Write-Step "[4/5]" "Creating n8n API key..."
+Write-Step "[2/3]" "Creating n8n API key..."
 
 $browserId  = [System.Guid]::NewGuid().ToString()
 $apiKey     = $null
-$keyLabel   = 'automation'
-# Expires 10 years from now (Unix timestamp in milliseconds)
-$expiresAt  = [long]([System.DateTimeOffset]::UtcNow.AddYears(10).ToUnixTimeMilliseconds())
-
-# Delete any existing key with the same label to avoid "entry already exists" error
-try {
-    $existingKeys = Invoke-N8n -Method GET -Path '/rest/api-keys' `
-        -Headers @{ 'browser-id' = $browserId } -UseSession
-    $existingKeys.data | Where-Object { $_.label -eq $keyLabel } | ForEach-Object {
-        Write-Note "Deleting existing API key '$keyLabel' (id: $($_.id))..."
-        Invoke-N8n -Method DELETE -Path "/rest/api-keys/$($_.id)" `
-            -Headers @{ 'browser-id' = $browserId } -UseSession | Out-Null
-    }
-} catch {
-    # Best-effort — proceed even if listing/deleting fails
-}
+$keyLabel   = $browserId
+# Expires 1 day from now (Unix timestamp in milliseconds)
+$expiresAt  = [long]([System.DateTimeOffset]::UtcNow.AddDays(1).ToUnixTimeMilliseconds())
 
 $apiKeyBody = @{
     label     = $keyLabel
     scopes    = @(
         'workflow:create', 'workflow:read', 'workflow:update',
-        'workflow:delete', 'workflow:list', 'workflow:execute'
+        'workflow:delete', 'workflow:list', 'workflow:activate'
     )
     expiresAt = $expiresAt
 }
@@ -386,8 +291,9 @@ try {
     $apiKeyResp = Invoke-N8n -Method POST -Path '/rest/api-keys' `
         -Body $apiKeyBody `
         -Headers @{ 'browser-id' = $browserId } `
-        -UseSession
-    $apiKey = $apiKeyResp.data.rawApiKey ?? $apiKeyResp.rawApiKey ?? $apiKeyResp.data.apiKey ?? $apiKeyResp.apiKey
+        -UseSession `
+        -Debug
+    $apiKey = $apiKeyResp.data?.rawApiKey ?? $apiKeyResp.rawApiKey
 } catch {
     Write-Note "Could not auto-create an API key: $($_.Exception.Message)"
     Write-Note "Please create one manually: n8n → Settings → API → Create API Key"
@@ -396,14 +302,61 @@ try {
 
 if ($apiKey) {
     Write-OK "API key created"
+    Start-Sleep -Seconds 5 # Brief pause to ensure n8n is ready for login after setup
+
 } else {
     Write-Note "Continuing without API key — workflow import will be skipped."
     $SkipWorkflowImport = $true
 }
 
+# ─── Phase 4b: Install community node ─────────────────────────────────────────
+# The community node must be installed BEFORE credential or workflow operations
+# because credential types (entraAgentIDApi) and workflow node types depend on it.
+# Community package management uses the session-based /rest/ endpoint — the
+# communityPackage:* scopes are not available as API key scopes.
+$communityPackageName = '@astaykov/n8n-nodes-entraagentid'
+
+if ($SkipNodeInstall) {
+    Write-Step "[2.5/3]" "Skipping community node install (-SkipNodeInstall set)."
+} else {
+    Write-Step "[2.5/3]" "Installing community node '$communityPackageName'..."
+
+    # Check if already installed
+    $_alreadyInstalled = $false
+    try {
+        $installedPkgs = Invoke-N8n -Method GET -Path '/rest/community-packages' -UseSession `
+            -RetryOnTransient -MaxAttempts 3 -InitialRetryDelaySeconds 3
+        $pkgList = if ($installedPkgs.PSObject.Properties['data']) { $installedPkgs.data } else { $installedPkgs }
+        if ($pkgList | Where-Object { $_.packageName -eq $communityPackageName }) {
+            $_alreadyInstalled = $true
+        }
+    } catch { <# best-effort check #> }
+
+    if ($_alreadyInstalled) {
+        Write-OK "Community node '$communityPackageName' already installed — skipping."
+    } else {
+        try {
+            Invoke-N8n -Method POST -Path '/rest/community-packages' `
+                -Body @{ name = $communityPackageName } `
+                -UseSession `
+                -RetryOnTransient -MaxAttempts 3 -InitialRetryDelaySeconds 10 | Out-Null
+            Write-OK "Community node '$communityPackageName' installed"
+        } catch {
+            Write-Err "Failed to install community node: $($_.Exception.Message)"
+            Write-Note "You can install it manually: n8n → Settings → Community Nodes → Install"
+        }
+
+        # n8n may need a moment after community node install to register new node types
+        Write-Note "Waiting for n8n to register new node types..."
+        Start-Sleep -Seconds 10
+    }
+}
+
 # ─── Phase 5: Create n8n credentials ─────────────────────────────────────────
 # Credentials are created BEFORE workflow import so their real IDs can be
 # substituted directly into the workflow JSON at import time — no patching needed.
+# Always uses session-based /rest/credentials — the public API rejects community
+# node credential types (e.g. entraAgentIDApi) via its validCredentialType middleware.
 $autonomousCredId    = $null
 $autonomousCredName  = 'EntraAgentID - Autonomous'
 $oboCredId           = $null
@@ -415,24 +368,42 @@ $mcpTokenCredName    = 'AgentID Auth Manager - Access Token'
 $bearerTokenCredId   = $null
 $bearerTokenCredName = 'Bearer from AuthManager'
 
+# Fetch all existing credentials once for dedup/delete across all phases
+$existingCreds = @()
+try {
+    $credResp = Invoke-N8n -Method GET -Path '/rest/credentials' -UseSession `
+        -RetryOnTransient -MaxAttempts 6 -InitialRetryDelaySeconds 3
+    $existingCreds = if ($credResp.PSObject.Properties['data']) { $credResp.data } else { @($credResp) }
+} catch { <# best-effort #> }
+
+function Remove-ExistingCredential {
+    param([string]$Name)
+    $existingCreds | Where-Object { $_.name -eq $Name } | ForEach-Object {
+        try {
+            Invoke-N8n -Method DELETE -Path "/rest/credentials/$($_.id)" -UseSession | Out-Null
+            Write-Note "Deleted existing credential: $($_.name)"
+        } catch { <# best-effort #> }
+    }
+}
+
+function New-N8nCredential {
+    param([hashtable]$Body)
+    $r = Invoke-N8n -Method POST -Path '/rest/credentials' -Body $Body -UseSession
+    return @{ id = $r.data.id; name = $r.data.name }
+}
+
 # ── 5a: Entra Agent ID credentials ──────────────────────────────────────────
 $_canCreateCreds = $EntraTenantId -and $EntraBlueprintId -and $EntraBlueprintSecret -and $EntraAgentId -and $EntraAgentUserUpn
 if ($SkipCredentialCreate -or -not $_canCreateCreds) {
-    Write-Step "[5a/7]" "Skipping Entra credential creation (-SkipCredentialCreate or missing parameters)."
+    Write-Step "[3a/3]" "Skipping Entra credential creation (-SkipCredentialCreate or missing parameters)."
     if (-not $SkipCredentialCreate -and -not $_canCreateCreds) {
         Write-Note "Supply -EntraTenantId, -EntraBlueprintId, -EntraBlueprintSecret, -EntraAgentId, -EntraAgentUserUpn to auto-create credentials."
     }
 } else {
-    Write-Step "[5a/7]" "Creating Entra Agent ID credentials in n8n..."
+    Write-Step "[3a/3]" "Creating Entra Agent ID credentials in n8n..."
     $tokenEndpoint = "https://login.microsoftonline.com/$EntraTenantId/oauth2/v2.0/token"
-    $credNames = @($autonomousCredName, $oboCredName)
-    try {
-        $existing = Invoke-N8n -Method GET -Path '/rest/credentials' -UseSession
-        $existing.data | Where-Object { $_.name -in $credNames } | ForEach-Object {
-            Invoke-N8n -Method DELETE -Path "/rest/credentials/$($_.id)" -UseSession | Out-Null
-            Write-Note "Deleted existing credential: $($_.name)"
-        }
-    } catch { <# best-effort #> }
+    Remove-ExistingCredential $autonomousCredName
+    Remove-ExistingCredential $oboCredName
     $credDefs = @(
         @{
             name = $autonomousCredName
@@ -459,97 +430,74 @@ if ($SkipCredentialCreate -or -not $_canCreateCreds) {
     )
     foreach ($cred in $credDefs) {
         $body = @{
-            name        = $cred.name
-            type        = "entraAgentIDApi"
-            data        = $cred.data
-            nodesAccess = @()
+            name = $cred.name
+            type = "entraAgentIDApi"
+            data = $cred.data
         }
-        $r = Invoke-N8n -Method POST -Path '/rest/credentials' -Body $body -UseSession
-        $createdId = $r.data.id
-        if ($cred.name -like '*Autonomous*') { $autonomousCredId = $createdId }
-        else                                 { $oboCredId        = $createdId }
-        Write-OK "Created credential '$($r.data.name)' (id=$createdId)"
+        $result = New-N8nCredential -Body $body
+        if ($cred.name -like '*Autonomous*') { $autonomousCredId = $result.id }
+        else                                 { $oboCredId        = $result.id }
+        Write-OK "Created credential '$($result.name)' (id=$($result.id))"
     }
 }
 
 # ── 5b: Azure OpenAI credential ──────────────────────────────────────────────
 $_canCreateOpenAiCred = $AzureOpenAiResourceName -and $AzureOpenAiApiKey
 if (-not $_canCreateOpenAiCred) {
-    Write-Step "[5b/7]" "Skipping Azure OpenAI credential creation (no -AzureOpenAiResourceName / -AzureOpenAiApiKey supplied)."
+    Write-Step "[3b/3]" "Skipping Azure OpenAI credential creation (no -AzureOpenAiResourceName / -AzureOpenAiApiKey supplied)."
 } else {
-    Write-Step "[5b/7]" "Creating Azure OpenAI credential '$openAiCredName' in n8n..."
-    try {
-        $existing = Invoke-N8n -Method GET -Path '/rest/credentials' -UseSession
-        $existing.data | Where-Object { $_.name -eq $openAiCredName } | ForEach-Object {
-            Invoke-N8n -Method DELETE -Path "/rest/credentials/$($_.id)" -UseSession | Out-Null
-            Write-Note "Deleted existing credential: $($_.name)"
-        }
-    } catch { <# best-effort #> }
+    Write-Step "[3b/3]" "Creating Azure OpenAI credential '$openAiCredName' in n8n..."
+    Remove-ExistingCredential $openAiCredName
     $body = @{
-        name        = $openAiCredName
-        type        = 'azureOpenAiApi'
-        data        = @{
+        name = $openAiCredName
+        type = 'azureOpenAiApi'
+        data = @{
             resourceName = $AzureOpenAiResourceName
             apiKey       = $AzureOpenAiApiKey
             apiVersion   = $AzureOpenAiApiVersion
         }
-        nodesAccess = @()
     }
-    $r = Invoke-N8n -Method POST -Path '/rest/credentials' -Body $body -UseSession
-    $openAiCredId = $r.data.id
-    Write-OK "Created credential '$($r.data.name)' (id=$openAiCredId)"
+    $r = New-N8nCredential -Body $body
+    $openAiCredId = $r.id
+    Write-OK "Created credential '$($r.name)' (id=$openAiCredId)"
 }
 
 # ── 5c: MCP token-forwarding credential (httpHeaderAuth) ─────────────────────
 Write-Step "[5c/7]" "Creating MCP token-forwarding credential '$mcpTokenCredName' in n8n..."
-try {
-    $existing = Invoke-N8n -Method GET -Path '/rest/credentials' -UseSession
-    $existing.data | Where-Object { $_.name -eq $mcpTokenCredName } | ForEach-Object {
-        Invoke-N8n -Method DELETE -Path "/rest/credentials/$($_.id)" -UseSession | Out-Null
-        Write-Note "Deleted existing credential: $($_.name)"
-    }
-} catch { <# best-effort #> }
+Remove-ExistingCredential $mcpTokenCredName
 $body = @{
-    name        = $mcpTokenCredName
-    type        = 'httpHeaderAuth'
-    data        = @{
+    name = $mcpTokenCredName
+    type = 'httpHeaderAuth'
+    data = @{
         name  = 'Authorization'
         value = "=Bearer {{ `$('Entra Agent ID Authentication Manager').item.json.agent_id_access_token }}"
     }
-    nodesAccess = @()
 }
-$r = Invoke-N8n -Method POST -Path '/rest/credentials' -Body $body -UseSession
-$mcpTokenCredId = $r.data.id
-Write-OK "Created credential '$($r.data.name)' (id=$mcpTokenCredId)"
+$r = New-N8nCredential -Body $body
+$mcpTokenCredId = $r.id
+Write-OK "Created credential '$($r.name)' (id=$mcpTokenCredId)"
 
 # ── 5d: Bearer token-forwarding credential (httpBearerAuth) ──────────────────
 Write-Step "[5d/7]" "Creating Bearer token-forwarding credential '$bearerTokenCredName' in n8n..."
-try {
-    $existing = Invoke-N8n -Method GET -Path '/rest/credentials' -UseSession
-    $existing.data | Where-Object { $_.name -eq $bearerTokenCredName } | ForEach-Object {
-        Invoke-N8n -Method DELETE -Path "/rest/credentials/$($_.id)" -UseSession | Out-Null
-        Write-Note "Deleted existing credential: $($_.name)"
-    }
-} catch { <# best-effort #> }
+Remove-ExistingCredential $bearerTokenCredName
 $body = @{
-    name        = $bearerTokenCredName
-    type        = 'httpBearerAuth'
-    data        = @{
+    name = $bearerTokenCredName
+    type = 'httpBearerAuth'
+    data = @{
         token = "={{ `$('Entra Agent ID Authentication Manager').item.json.agent_id_access_token }}"
     }
-    nodesAccess = @()
 }
-$r = Invoke-N8n -Method POST -Path '/rest/credentials' -Body $body -UseSession
-$bearerTokenCredId = $r.data.id
-Write-OK "Created credential '$($r.data.name)' (id=$bearerTokenCredId)"
+$r = New-N8nCredential -Body $body
+$bearerTokenCredId = $r.id
+Write-OK "Created credential '$($r.name)' (id=$bearerTokenCredId)"
 
 # ─── Phase 6: Import workflows ───────────────────────────────────────────────
 # Credential IDs are substituted into the raw JSON before parsing, so imported
 # workflows already have the correct credential IDs — no post-import patching needed.
 if ($SkipWorkflowImport) {
-    Write-Step "[6/7]" "Skipping workflow import (-SkipWorkflowImport set or no API key available)."
+    Write-Step "[3/3]" "Skipping workflow import (-SkipWorkflowImport set or no API key available)."
 } else {
-    Write-Step "[6/7]" "Importing workflows from: $WorkflowsPath"
+    Write-Step "[3/3]" "Importing workflows from: $WorkflowsPath"
 
     $workflowFiles = Get-ChildItem -Path $WorkflowsPath -Filter '*.json' -ErrorAction SilentlyContinue
 
@@ -644,19 +592,30 @@ if ($SkipWorkflowImport) {
     }
 }
 
-# ─── Phase 8: Activate trigger workflows ────────────────────────────────────
-# Uses the session-based /rest/ endpoint (proven reliable) rather than the
-# public API, which has version-dependent versionId requirements and scope issues.
-# Brief pause — n8n needs a moment after credential PUTs before allowing activation.
+# ─── Phase 8: Activate trigger workflows ─────────────────────────────────────
+# Brief pause — n8n needs a moment after credential creation before allowing activation.
 Start-Sleep -Seconds 3
 
-Write-Step "[8/7]" "Activating trigger workflows..."
+Write-Step "[3/3]" "Activating trigger workflows..."
+
+# Use public API with API key if available, otherwise session-based /rest/
+if ($apiKey) {
+    $wfListPath    = '/api/v1/workflows?limit=250'
+    $wfAuth        = @{ ApiKey = $apiKey }
+    $wfActivateBase = '/api/v1/workflows'
+} else {
+    $wfListPath    = '/rest/workflows'
+    $wfAuth        = @{ UseSession = $true }
+    $wfActivateBase = '/rest/workflows'
+}
+
+$activationData = $null
 try {
-    $activationList = (Invoke-N8n -Method GET -Path '/rest/workflows' -UseSession)
+    $activationList = Invoke-N8n -Method GET -Path $wfListPath @wfAuth `
+        -RetryOnTransient -MaxAttempts 6 -InitialRetryDelaySeconds 3
     $activationData = if ($activationList.PSObject.Properties['data']) { $activationList.data } else { $activationList }
 } catch {
     Write-Err "Could not list workflows for activation: $($_.Exception.Message)"
-    $activationData = $null
 }
 
 if ($activationData) {
@@ -664,22 +623,14 @@ if ($activationData) {
     foreach ($wfSummary in $activationData) {
         if ($wfSummary.active) { continue }
 
-        try {
-            $wfResp = Invoke-N8n -Method GET -Path "/rest/workflows/$($wfSummary.id)" -UseSession -ErrorAction Stop
-            $fullWf = if ($wfResp.PSObject.Properties['data']) { $wfResp.data } else { $wfResp }
-        } catch { continue }
-
-        $hasTrigger = $fullWf.nodes | Where-Object {
+        $hasTrigger = $wfSummary.nodes | Where-Object {
             $_.type -like '*webhook*' -or $_.type -like '*chatTrigger*'
         }
         if (-not $hasTrigger) { continue }
 
-        $versionIdProp = $fullWf.PSObject.Properties['versionId']
-        $activateBody  = if ($versionIdProp) { @{ versionId = $versionIdProp.Value } } else { @{} }
-
         try {
-            Invoke-N8n -Method POST -Path "/rest/workflows/$($wfSummary.id)/activate" `
-                -Body $activateBody -UseSession -ErrorAction Stop | Out-Null
+            Invoke-N8n -Method POST -Path "$wfActivateBase/$($wfSummary.id)/activate" @wfAuth `
+                -RetryOnTransient -MaxAttempts 3 -InitialRetryDelaySeconds 3 | Out-Null
             Write-OK "  Activated '$($wfSummary.name)'"
             $activatedCount++
         } catch {

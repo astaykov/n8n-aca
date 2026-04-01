@@ -23,6 +23,12 @@
     "memorySize": {
       "value": "2Gi"
     },
+    "n8nAdminEmail": {
+      "value": "n8n@contoso.com"
+    },
+    "n8nAdminPassword": {
+      "value": "SuperStr0ngP@ssw0rd!"
+    },
     "fileShareName": {
       "value": "n8ndata"
     },

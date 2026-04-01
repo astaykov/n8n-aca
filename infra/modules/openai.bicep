@@ -56,7 +56,7 @@ resource modelDeployment 'Microsoft.CognitiveServices/accounts/deployments@2024-
 // Resource name (subdomain) is what n8n azureOpenAiApi credential expects
 output resourceName string = openAi.name
 output endpoint string = openAi.properties.endpoint
-// API key is stored only in azd env (.azure/<env>/.env, gitignored) — never committed to source control
-#disable-next-line outputs-should-not-contain-secrets
-output apiKey string = openAi.listKeys().key1
+// API key is NOT output from Bicep to avoid a race condition (RequestConflict 409) that occurs
+// when listKeys() is evaluated immediately after the child model deployment settles.
+// The key is fetched in postprovision.ps1 via `az cognitiveservices account keys list`.
 output deploymentName string = modelDeployment.name

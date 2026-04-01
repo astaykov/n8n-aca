@@ -28,3 +28,9 @@ logs/
 # Temporary files
 *.tmp
 temp/
+
+# azd preflight artifacts (generated during azd provision)
+infra/preflight-*.bicepparam
+
+# Generated SPA config (produced from authConfig.template.js by postprovision hook)
+test-spa/authConfig.js
