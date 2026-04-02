@@ -4,6 +4,12 @@
 
 ---
 
+## 📺 Video walkthrough
+
+[![Watch the full setup walkthrough on YouTube](https://img.youtube.com/vi/OSjZC6fuHUo/maxresdefault.jpg)](https://youtu.be/OSjZC6fuHUo)
+
+---
+
 ## Quick start (Azure Cloud Shell)
 
 Open [Azure Cloud Shell](https://shell.azure.com) (`PowerShell`) and run:
