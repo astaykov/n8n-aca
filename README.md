@@ -6,7 +6,7 @@
 
 ## 📺 Video walkthrough
 
-[![Watch the full setup walkthrough on YouTube](https://img.youtube.com/vi/OSjZC6fuHUo/maxresdefault.jpg)](https://youtu.be/OSjZC6fuHUo)
+[![Watch the full setup walkthrough on YouTube](https://img.youtube.com/vi/DXKGgTTrsEc/maxresdefault.jpg)](https://www.youtube.com/watch?v=DXKGgTTrsEc)
 
 ---
 
