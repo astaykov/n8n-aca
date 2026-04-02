@@ -6,11 +6,13 @@
 
 ## Quick start (Azure Cloud Shell)
 
-Open [Azure Cloud Shell](https://shell.azure.com) (Bash) and run:
+Open [Azure Cloud Shell](https://shell.azure.com) (`PowerShell`) and run:
 
 ```bash
-git clone https://github.com/astaykov/n8n-aca.git && cd n8n-aca && azd up
+git clone https://github.com/astaykov/n8n-aca.git && cd n8n-aca && azd auth login && azd up
 ```
+
+> In Azure Cloud Shell, `azd auth login` will display a device code — open the URL shown and enter the code to authenticate, then `azd up` continues automatically.
 
 `azd up` will prompt you for:
 
