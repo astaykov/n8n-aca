@@ -3,6 +3,41 @@
 > One-command deployment: n8n on Azure Container Apps with Entra Agent ID and Microsoft Graph MCP Server for Enterprise — fully automated from Azure Cloud Shell.
 
 ---
+## Prerequisites
+
+> *Important:* This is a demo oriented infrastrucure automation. It requires high privileges in your environment.
+
+- An Azure subscription with quota for Azure OpenAI (GPT-4o or similar), PostgreSQL Flexible server, Azure Container Apps.
+- **Entra role:** Global Administrator: this role is required because of the many entities created along with amdin consent to permissions. The automation will fail if you do not have active `Global Administrator` role.
+
+**Azure Cloud Shell** (recommended) comes with everything pre-installed: Azure CLI, Azure Developer CLI (`azd`), PowerShell 7, and Git.
+
+<details>
+<summary>Running locally instead of Cloud Shell</summary>
+
+- [Azure Developer CLI (`azd`)](https://learn.microsoft.com/azure/developer/azure-developer-cli/install-azd) v1.9+
+- [Azure CLI (`az`)](https://learn.microsoft.com/cli/azure/install-azure-cli) v2.60+
+- PowerShell 7.4+
+- [Microsoft.Entra PowerShell module](https://learn.microsoft.com/powershell/entra-powershell/) v1.2+ — installed automatically if missing
+- Git
+
+Log in before running:
+
+```bash
+az login
+azd auth login
+```
+
+Then:
+
+```bash
+git clone https://github.com/astaykov/n8n-aca.git && cd n8n-aca && azd up
+```
+
+</details>
+
+---
+
 
 ## 📺 Video walkthrough
 
@@ -45,39 +80,6 @@ After infrastructure deploys, the postprovision hook runs automatically:
 When complete, the script prints your n8n URL and a summary.
 
 > **Tenant ID** is auto-detected from your Azure login — no manual configuration needed.
-
----
-
-## Prerequisites
-
-- An Azure subscription with quota for Azure OpenAI (GPT-4o or similar)
-- **Entra role:** Global Administrator **or** Application Administrator (needed to create app registrations and grant admin consent)
-
-**Azure Cloud Shell** (recommended) comes with everything pre-installed: Azure CLI, Azure Developer CLI (`azd`), PowerShell 7, and Git.
-
-<details>
-<summary>Running locally instead of Cloud Shell</summary>
-
-- [Azure Developer CLI (`azd`)](https://learn.microsoft.com/azure/developer/azure-developer-cli/install-azd) v1.9+
-- [Azure CLI (`az`)](https://learn.microsoft.com/cli/azure/install-azure-cli) v2.60+
-- PowerShell 7.4+
-- [Microsoft.Entra PowerShell module](https://learn.microsoft.com/powershell/entra-powershell/) v1.2+ — installed automatically if missing
-- Git
-
-Log in before running:
-
-```bash
-az login
-azd auth login
-```
-
-Then:
-
-```bash
-git clone https://github.com/astaykov/n8n-aca.git && cd n8n-aca && azd up
-```
-
-</details>
 
 ---
 
