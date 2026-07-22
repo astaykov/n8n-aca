@@ -35,7 +35,7 @@
     },
     {
       "parameters": {
-        "model": "gpt-4o",
+        "model": "gpt-5.4-nano",
         "options": {}
       },
       "type": "@n8n/n8n-nodes-langchain.lmChatAzureOpenAi",
@@ -45,7 +45,7 @@
         192
       ],
       "id": "887f3ca5-7bb0-4e81-96bb-b9b4e81fb293",
-      "name": "Azure OpenAI GPT-4o",
+      "name": "Azure OpenAI gpt-5.4-nano",
       "credentials": {
         "azureOpenAiApi": {
           "id": "REPLACE_WITH_AZURE_OPENAI_CREDENTIAL_ID",
@@ -148,7 +148,7 @@
         []
       ]
     },
-    "Azure OpenAI GPT-4o": {
+    "Azure OpenAI gpt-5.4-nano": {
       "ai_languageModel": [
         [
           {

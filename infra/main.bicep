@@ -28,7 +28,7 @@ param n8nAdminPassword string
 
 
 @description('n8n container image to deploy.')
-param n8nImage string = 'docker.n8n.io/n8nio/n8n:latest'
+param n8nImage string = 'ghcr.io/n8n-io/n8n:2.25.7'
 
 @description('CPU cores allocated to the n8n container.')
 param cpuCores string = '1'
@@ -39,14 +39,14 @@ param memorySize string = '2Gi'
 @description('Entra tenant ID where Agent ID objects (Blueprint, Agent Identity, Agent User) will be provisioned. Leave empty to skip Entra setup.')
 param entraTenantId string = ''
 
-@description('Azure OpenAI model deployment name. Must match the deployment name used in n8n workflow nodes (default: gpt-5.4).')
-param openAiDeploymentName string = 'gpt-4o'
+@description('Azure OpenAI model deployment name. Must match the deployment name used in n8n workflow nodes (default: gpt-5.4-nano).')
+param openAiDeploymentName string = 'gpt-5.4-nano'
 
 @description('Azure OpenAI model to deploy. Must be available in the target region.')
-param openAiModelName string = 'gpt-4o'
+param openAiModelName string = 'gpt-5.4-nano'
 
 @description('Azure OpenAI model version.')
-param openAiModelVersion string = '2024-11-20'
+param openAiModelVersion string = '2026-03-17'
 
 @description('Azure OpenAI deployment SKU. Standard works in all regions; GlobalStandard only in select US regions.')
 param openAiDeploymentSku string = 'GlobalStandard'

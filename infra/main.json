@@ -47,7 +47,7 @@
     },
     "n8nImage": {
       "type": "string",
-      "defaultValue": "docker.n8n.io/n8nio/n8n:latest",
+      "defaultValue": "ghcr.io/n8n-io/n8n:2.25.7",
       "metadata": {
         "description": "n8n container image to deploy."
       }
@@ -89,21 +89,21 @@
     },
     "openAiDeploymentName": {
       "type": "string",
-      "defaultValue": "gpt-5.4",
+      "defaultValue": "gpt-5.4-nano",
       "metadata": {
-        "description": "Azure OpenAI model deployment name. Must match the deployment name used in n8n workflow nodes (default: gpt-5.4)."
+        "description": "Azure OpenAI model deployment name. Must match the deployment name used in n8n workflow nodes (default: gpt-5.4-nano)."
       }
     },
     "openAiModelName": {
       "type": "string",
-      "defaultValue": "gpt-4o",
+      "defaultValue": "gpt-5.4-nano",
       "metadata": {
         "description": "Azure OpenAI model to deploy. Must be available in the target region."
       }
     },
     "openAiModelVersion": {
       "type": "string",
-      "defaultValue": "2024-11-20",
+      "defaultValue": "2026-03-17",
       "metadata": {
         "description": "Azure OpenAI model version."
       }
@@ -597,21 +597,21 @@
             },
             "deploymentName": {
               "type": "string",
-              "defaultValue": "gpt-5.4",
+              "defaultValue": "gpt-5.4-nano",
               "metadata": {
                 "description": "Name for the Azure OpenAI model deployment. Must match the deployment name referenced in n8n workflow nodes."
               }
             },
             "modelName": {
               "type": "string",
-              "defaultValue": "gpt-4o",
+              "defaultValue": "gpt-5.4-nano",
               "metadata": {
-                "description": "Azure OpenAI model to deploy (e.g. gpt-4o, gpt-4o-mini)"
+                "description": "Azure OpenAI model to deploy (e.g. gpt-5.4-nano)"
               }
             },
             "modelVersion": {
               "type": "string",
-              "defaultValue": "2024-11-20",
+              "defaultValue": "2026-03-17",
               "metadata": {
                 "description": "Version of the model to deploy"
               }
@@ -807,7 +807,7 @@
             },
             "n8nImage": {
               "type": "string",
-              "defaultValue": "docker.n8n.io/n8nio/n8n:latest",
+              "defaultValue": "ghcr.io/n8n-io/n8n:2.25.7",
               "metadata": {
                 "description": "n8n container image"
               }

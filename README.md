@@ -7,7 +7,7 @@
 
 > *Important:* This is a demo oriented infrastrucure automation. It requires high privileges in your environment.
 
-- An Azure subscription with quota for Azure OpenAI (GPT-4o or similar), PostgreSQL Flexible server, Azure Container Apps.
+- An Azure subscription with quota for Azure OpenAI (gpt-5.4-nano), PostgreSQL Flexible server, Azure Container Apps.
 - **Entra role:** Global Administrator: this role is required because of the many entities created along with amdin consent to permissions. The automation will fail if you do not have active `Global Administrator` role.
 
 **Azure Cloud Shell** (recommended) comes with everything pre-installed: Azure CLI, Azure Developer CLI (`azd`), PowerShell 7, and Git.
@@ -269,7 +269,7 @@ To add more scopes, edit the `$MCP_SCOPES` array in [scripts/Setup-EntraAgentId.
 | n8n Container App | 1 vCore, 2 GiB | ~$15 |
 | Static Web App | Free tier | $0 |
 | PostgreSQL Flexible Server | Burstable B1ms | ~$12 |
-| Azure OpenAI | Pay-per-token (GPT-4o) | varies |
+| Azure OpenAI | Pay-per-token (gpt-5.4-nano) | varies |
 | Storage Account | LRS, < 1 GB | ~$1 |
 | Log Analytics | Pay-as-you-go | ~$2 |
 | **Total (ex. OpenAI)** | | **~$30/month** |

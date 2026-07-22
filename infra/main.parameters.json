@@ -15,7 +15,7 @@
       "value": "eastus2"
     },    
     "n8nImage": {
-      "value": "docker.n8n.io/n8nio/n8n:latest"
+      "value": "ghcr.io/n8n-io/n8n:2.25.7"
     },
     "cpuCores": {
       "value": "1"
@@ -33,13 +33,13 @@
       "value": "n8ndata"
     },
     "openAiDeploymentName": {
-      "value": "gpt-4o"
+      "value": "gpt-5.4-nano"
     },
     "openAiModelName": {
-      "value": "gpt-4o"
+      "value": "gpt-5.4-nano"
     },
     "openAiModelVersion": {
-      "value": "2024-11-20"
+      "value": "2026-03-17"
     },
     "openAiDeploymentSku": {
       "value": "GlobalStandard"

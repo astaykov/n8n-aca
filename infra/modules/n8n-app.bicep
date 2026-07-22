@@ -31,7 +31,7 @@ param n8nAdminEmail string
 param n8nAdminPassword string
 
 @description('n8n container image')
-param n8nImage string = 'docker.n8n.io/n8nio/n8n:latest'
+param n8nImage string = 'ghcr.io/n8n-io/n8n:2.25.7'
 
 @description('CPU cores allocated to the container (e.g. 0.5, 1, 2)')
 param cpuCores string = '1'

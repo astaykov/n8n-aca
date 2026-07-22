@@ -5,13 +5,13 @@ param location string
 param resourceToken string
 
 @description('Name for the Azure OpenAI model deployment. Must match the deployment name referenced in n8n workflow nodes.')
-param deploymentName string = 'gpt-5.4'
+param deploymentName string = 'gpt-5.4-nano'
 
-@description('Azure OpenAI model to deploy (e.g. gpt-4o, gpt-4o-mini)')
-param modelName string = 'gpt-4o'
+@description('Azure OpenAI model to deploy (e.g. gpt-5.4-nano)')
+param modelName string = 'gpt-5.4-nano'
 
 @description('Version of the model to deploy')
-param modelVersion string = '2024-11-20'
+param modelVersion string = '2026-03-17'
 
 @description('Tokens-per-minute capacity (in thousands). 230 = 230K TPM.')
 param tpmCapacity int = 230
